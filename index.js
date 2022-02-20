@@ -52,6 +52,7 @@ const devolve = item => "seeds." + item.split('.')[2];
 */
 const index = (obj, string) => string.split('.').reduce((o, x) => o[x], obj);
 
+let shouldReload = true;
 let plants = [];
 for (let x = 0; x < 3; x++)
   for (let y = 0; y < 3; y++)
@@ -80,20 +81,21 @@ app.get('/', (req, res) => {
   res.send(`
     <h1> You have ${inv.length} seeds. </h1>
     ${grid}
+    <script>
+    setInterval(async () => {
+      let res = await fetch("/farm/shouldreload");
+      let { reload } = await res.json();
+
+      if (reload)
+        window.location.reload();
+    }, 1000/5);
+    </script>
   `);
 })
 
-app.get('/plant/:id/:seed', (req, res) => {
-  const { id, seed } = req.params;
-
-  let seedI = inv.indexOf(seed);
-  if (seedI >= 0) {
-    inv.splice(seedI, 1);
-    let plant = plants.find(p => p.id == id); 
-    plant.kind = evolve(seed);
-    res.redirect("/farm");
-  }
-  throw new Error("you don't have that kind of seed!");
+app.get('/shouldreload', (req, res) => {
+  res.send({ reload: shouldReload });
+  shouldReload = false;
 });
 
 app.get('/plant/:id', (req, res) => {
@@ -118,12 +120,27 @@ app.get('/plant/:id', (req, res) => {
   res.redirect("/farm");
 });
 
+app.get('/plant/:id/:seed', (req, res) => {
+  const { id, seed } = req.params;
+
+  let seedI = inv.indexOf(seed);
+  if (seedI >= 0) {
+    inv.splice(seedI, 1);
+    let plant = plants.find(p => p.id == id); 
+    plant.kind = evolve(seed);
+    res.redirect("/farm");
+  }
+  throw new Error("you don't have that kind of seed!");
+});
+
 setInterval(() => {
   for (let plant of plants)
     if (plant.kind) {
       plant.age++;
-      if (plant.age % 49 == 0)
+      if (plant.age % 49 == 0) {
+        shouldReload = true;
         inv.push(devolve(plant.kind));
+      }
     }
 }, 1000/5);
 
