@@ -41,6 +41,11 @@ let inv = [
   "seeds.hacker"
 ];
 
+/* takes seed, returns plant */
+const evolve = item => "plants.0." + item.split('.')[1];
+/* takes plant, returns seed */
+const devolve = item => "seeds." + item.split('.')[2];
+
 /* EXAMPLE:
      input: index(NAMES, "plants.0.bractus"),
      output: "bractus loaf"
@@ -49,63 +54,77 @@ const index = (obj, string) => string.split('.').reduce((o, x) => o[x], obj);
 
 let plants = [];
 for (let x = 0; x < 3; x++)
-    for (let y = 0; y < 3; y++)
-        plants.push({ x, y, occupied: false, age: 0, id: newId() });
+  for (let y = 0; y < 3; y++)
+    plants.push({ x, y, age: 0, id: newId() });
 
 
 function imageHTML(x, y, size, href, art) {
-    let style = `position:absolute;`
-    style += `left:${x*120}px;top:${y*120}px;`;
-    style += `width:120px;height:120px;`;
+  let style = `position:absolute;`;
+  style += `left:${x*120}px;top:${y*120}px;`;
+  style += `width:120px;height:120px;`;
 
-    let img = `<img src="${art}" style="${style}"></img>`;
+  let img = `<img src="${art}" style="${style}"></img>`;
 
-    return`<a href="${href}"> ${img} </a>`;
+  return`<a href="${href}"> ${img} </a>`;
 }
 
-app.get('/data', (req, res) => {
-  res.send({ plants, seeds });
-});
-
 app.get('/', (req, res) => {
-    let grid = '<div style="position:relative;">';
-    for (let plant of plants) {
-        let { x, y, id } = plant;
-        let art = (plant.occupied) ? ART.icon : ART.dirt;
-        grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
-    }
-    grid += "</div>";
+  let grid = '<div style="position:relative;">';
+  for (let plant of plants) {
+    let { x, y, id } = plant;
+    let art = (plant.kind) ? index(ART, plant.kind) : ART.dirt;
+    grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
+  }
+  grid += "</div>";
 
-    res.send(`
-      <h1> You have ${inv.length} seeds. </h1>
-      ${grid}
-    `);
+  res.send(`
+    <h1> You have ${inv.length} seeds. </h1>
+    ${grid}
+  `);
 })
 
-app.get('/plant/:id', (req, res) => {
-    if (seeds >= 1) {
-        seeds -= 1;
-        let current = plants.find(p => p.id == req.params.id); 
-        current.occupied = true;
+app.get('/plant/:id/:seed', (req, res) => {
+  const { id, seed } = req.params;
 
-        res.send(`
-          These are the seeds you have in your inventory:
-        `);
-
-        return;
-    }
+  let seedI = inv.indexOf(seed);
+  if (seedI >= 0) {
+    inv.splice(seedI, 1);
+    let plant = plants.find(p => p.id == id); 
+    plant.kind = evolve(seed);
     res.redirect("/farm");
+  }
+  throw new Error("you don't have that kind of seed!");
+});
+
+app.get('/plant/:id', (req, res) => {
+  const { id } = req.params;
+
+  if (inv.length >= 1) {
+    let page = '<h2>';
+    page += 'These are the seeds you have in your inventory:';
+    page += '</h2>';
+    page += '<div style="position:relative;">';
+    let x = 0;
+    for (let item of inv) {
+      let link = `/farm/plant/${id}/${item}`;
+      page += imageHTML(x++, 0, 30, link, index(ART, item));
+    }
+    page += '</div>';
+
+    res.send(page);
+
+    return;
+  }
+  res.redirect("/farm");
 });
 
 setInterval(() => {
   for (let plant of plants)
-    if (plant.occupied) {
+    if (plant.kind) {
       plant.age++;
       if (plant.age % 49 == 0)
-        seeds++;
+        inv.push(devolve(plant.kind));
     }
 }, 1000/5);
 
-app.listen(port, () => {
-    console.log(`Example app listening on port ${port}`)
-})
+app.listen(port, () => console.log(`Example app listening on port ${port}`))
