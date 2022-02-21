@@ -116,8 +116,6 @@ const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
 const devolve = item => "seeds." + item.split('.')[2];
 
-let shouldReload = true;
-
 
 function imageHTML(x, y, size, href, art) {
     console.log(x + " : " + y + " : " + size + " : " + href + " : "  + art);
@@ -134,6 +132,7 @@ app.get('/', (req, res) => {
     //on no save
     if (typeof req.session.sav == "undefined") {
         req.session.sav = {};
+        req.session.shouldReload = true;
         //populate inventory with default items
         req.session.sav.inv = [
             "seeds.bractus",
@@ -150,7 +149,15 @@ app.get('/', (req, res) => {
                     age: 0,
                     id: seedID++
                 });
-        req.session.playerID = playerID++;
+        req.session.sav.playerID = playerID++;
+    } else /* if theres a cookie save, grab the global updates*/ {
+      console.log("ok")
+      for (let player of playerDatArr) {
+        if (player.playerID == req.session.sav.playerID) {
+          req.session.sav = player;
+          console.log(playerDatArr)
+        }
+      }
     }
 
     let grid = '<div style="position:relative;">';
@@ -187,9 +194,9 @@ app.get('/', (req, res) => {
 
 app.get('/shouldreload', (req, res) => {
     res.send({
-        reload: shouldReload
+        reload: req.session.sav.shouldReload
     });
-    shouldReload = false;
+    req.session.sav.shouldReload = false;
 });
 
 app.get('/plant/:id', (req, res) => {
