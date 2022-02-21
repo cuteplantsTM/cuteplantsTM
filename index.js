@@ -111,6 +111,15 @@ let playerID = 0;
 let seedID = 0;
 let playerDatArr = [];
 
+function updateDat(player) {
+    let globDat = playerDatArr.find((dat) => dat.playerID == player.playerID);
+    globDat = player;
+}
+
+function getPl(playerID) {
+    return playerDatArr.find((player) => player.playerID == playerID);
+}
+
 /* takes seed, returns plant */
 const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
@@ -118,7 +127,6 @@ const devolve = item => "seeds." + item.split('.')[2];
 
 
 function imageHTML(x, y, size, href, art) {
-    console.log(x + " : " + y + " : " + size + " : " + href + " : "  + art);
     let style = `position:absolute;`;
     style += `left:${x*120}px;top:${y*120}px;`;
     style += `width:120px;height:120px;`;
@@ -132,7 +140,6 @@ app.get('/', (req, res) => {
     //on no save
     if (typeof req.session.sav == "undefined") {
         req.session.sav = {};
-        req.session.shouldReload = true;
         //populate inventory with default items
         req.session.sav.inv = [
             "seeds.bractus",
@@ -149,18 +156,14 @@ app.get('/', (req, res) => {
                     age: 0,
                     id: seedID++
                 });
-        req.session.sav.playerID = playerID++;
+        updateDat(req.session.sav);
+        req.session.sav.shouldReload = true;
     } else /* if theres a cookie save, grab the global updates*/ {
-      console.log("ok")
-      for (let player of playerDatArr) {
-        if (player.playerID == req.session.sav.playerID) {
-          req.session.sav = player;
-          console.log(playerDatArr)
-        }
-      }
+        req.session.sav = getPl(req.session.sav.playerID);
     }
 
     let grid = '<div style="position:relative;">';
+    //console.log(req.session.sav.farm);
     for (let plant of req.session.sav.farm) {
         let {
             x,
@@ -168,10 +171,13 @@ app.get('/', (req, res) => {
             id
         } = plant;
         let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
-        console.log("kind: " + plant.kind)
         grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
     }
     grid += "</div>";
+
+    updateDat(req.session.sav);
+
+    console.log("farm: " + req.session.sav.farm)
 
     res.send(`
         <title>cuteplantsTM ${online} Online</title>
@@ -182,24 +188,26 @@ app.get('/', (req, res) => {
           let res = await fetch("/farm/shouldreload");
           let { reload } = await res.json();
 
+          console.log(reload);
+
           if (reload)
             window.location.reload();
-        }, 1000/5);
+        }, 1000/10);
         </script>
     `);
-    let globDat = playerDatArr.find((player) => player.playerID === req.session.sav.playerID);
-    globDat = req.session.sav;
 
 })
 
 app.get('/shouldreload', (req, res) => {
+    if (req.session.sav.shouldReload)
+        req.session.sav.shouldReload = !req.session.sav.shouldReload;
     res.send({
         reload: req.session.sav.shouldReload
     });
-    req.session.sav.shouldReload = false;
 });
 
 app.get('/plant/:id', (req, res) => {
+    req.session.sav = getPl(req.session.sav.playerID);
     const {
         id
     } = req.params;
@@ -239,17 +247,20 @@ app.get('/plant/:id/:seed', (req, res) => {
         return;
     }
     throw new Error("you don't have that kind of seed!");
+    updateDat(req.session.sav);
 });
 
 setInterval(() => {
     tickClock++
     for (let player of playerDatArr) {
+        console.log("player: " + player)
         for (let plant of player.farm) {
             if (plant.kind) {
                 plant.age++;
                 if (plant.age % 49 == 0) {
-                    shouldReload = true;
-                    req.session.sav.inv.push(devolve(plant.kind));
+                    console.log("tick plant")
+                    player.shouldReload = true;
+                    player.inv.push(devolve(plant.kind));
                 }
             }
         }
