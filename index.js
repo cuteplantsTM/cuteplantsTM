@@ -57,25 +57,38 @@ let shouldReload = true;
 let plants = [];
 for (let x = 0; x < 3; x++)
   for (let y = 0; y < 3; y++)
-    plants.push({ x, y, age: 0, id: newId() });
+    if (x != y || x == 1)
+      plants.push({ x, y, age: 0, id: newId() });
 
 
-function imageHTML(x, y, size, href, art) {
-  let style = `position:absolute;`;
-  style += `left:${x*120}px;top:${y*120}px;`;
-  style += `width:120px;height:120px;`;
+function imageHTML({ size, href, art, pos }) {
+  let style = `width:${size}px;height:${size}px;`;
+  if (pos) {
+    const [x, y] = pos;
+    style += `position:absolute;`;
+    style += `left:${x}px;top:${y}px;`;
+  }
 
   let img = `<img src="${art}" style="${style}"></img>`;
-
   return`<a href="${href}"> ${img} </a>`;
 }
+
+const axialHexToPixel = (x, y) => [
+    80 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
+    80 * (                             3 /2 * y)
+];
 
 app.get('/', (req, res) => {
   let grid = '<div style="position:relative;">';
   for (let plant of plants) {
     let { x, y, id } = plant;
     let art = (plant.kind) ? index(ART, plant.kind) : ART.dirt;
-    grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
+    grid += imageHTML({
+      pos: axialHexToPixel(x, y),
+      size: 120,
+      href: '/farm/plant/' + id,
+      art
+    });
   }
   grid += "</div>";
 
@@ -106,12 +119,14 @@ app.get('/plant/:id', (req, res) => {
     let page = '<h2>';
     page += 'These are the seeds you have in your inventory:';
     page += '</h2>';
-    page += '<div style="position:relative;">';
+    page += '<div style="width:400px;">';
     let x = 0;
-    for (let item of inv) {
-      let link = `/farm/plant/${id}/${item}`;
-      page += imageHTML(x++, 0, 30, link, index(ART, item));
-    }
+    for (let item of inv)
+      page += imageHTML({
+        size: 120,
+        href: `/farm/plant/${id}/${item}`,
+        art: index(ART, item)
+      });
     page += '</div>';
 
     res.send(page);
