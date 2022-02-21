@@ -15,44 +15,95 @@ app.use(function (req, res, next) {
   next()
 })
 
-const ART = {
-    seeds: {
-        bractus: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/bractus_seed.png?raw=true",
-        coffea: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/coffea_cyl_seed.png?raw=true",
-        hacker: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/hacker_vibes_vine_seed.png?raw=true",
-    },
-    plants: [{
-        bractus: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/bractus_loaf.gif?raw=true",
-        coffea: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/coffea_cyl_baby.gif?raw=true",
-        hacker: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/hacker_vibes_vine_baby.gif?raw=true",
-    }],
-    dirt: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/dirt.png?raw=true",
-    icon: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/seedlet.png?raw=true"
-};
-
-const NAMES = {
-    seeds: {
-        bractus: "bractus seed",
-        coffea: "coffea cyl seed",
-        hacker: "hacker vibes vine seed",
-    },
-    plants: [{
-        bractus: "bractus loaf",
-        coffea: "coffea cyl baby",
-        hacker: "hacker vibes vine sprout",
-    }],
-};
-
-let flat = {};
-function flatten(path, obj) {
+/* EXAMPLE:
+ * in:
+ *  flatten({
+ *     plants: [
+ *       { a:  "hi", b: "heyo" },
+ *       { a: "bye", b:  "cya" },
+ *     ]
+ *   })
+ * out:
+ *  {
+ *    "plants.0.a": "hi",
+ *    "plants.0.b": "heyo",
+ *    "plants.1.a": "bye",
+ *    "plants.1.b": "cya",
+ *  }
+*/
+function flatten(obj, path, out = {}) {
   for (const [key, val] of Object.entries(obj)) {
-    let valpath = (path.length) ? (path + "." + key) : key;
+    let valpath = path ? `${path}.${key}` : key;
     if (typeof val == "string")
-      flat[valpath] = val;
+      out[valpath] = val;
     else
-      flatten(valpath, val);
+      flatten(val, valpath, out);
   }
+  return out;
 }
+
+const ART = flatten({
+  seeds: {
+    bractus: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/bractus_seed.png?raw=true",
+    coffea: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/coffea_cyl_seed.png?raw=true"
+,
+    hacker: "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/hacker_vibes_vine_seed.png?raw=true"
+,
+  },
+  plants: [{
+    bractus: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/bractus_loaf.gif?raw=true",
+    coffea: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/coffea_cyl_baby.gif?raw=true",
+    hacker: "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/hacker_vibes_vine_baby.gif?raw=true",
+  }],
+  dirt: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/dirt.png?raw=true",
+  icon: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/seedlet.png?raw=true"
+});
+
+const NAMES = flatten({
+  seeds: {
+    bractus: "bractus seed",
+    coffea: "coffea cyl seed",
+    hacker: "hacker vibes vine seed",
+  },
+  essence: [
+    {
+      /* raw essences, plants drop these directly */
+      bractus: "bread essence",
+      coffea: "cyl crystal",
+      hacker: "hacker spirit",
+    },
+    {
+      /* compressed forms plants craft from raw */
+      bractus: "bressence",
+      coffea: "crystcyl",
+      hacker: "hacksprit",
+    }
+  ],
+  items: [
+    {
+      bractus: "rolling pin",
+      coffea: "cyl wand",
+      hacker: "vine keyboard",
+    },
+    {
+      bractus: "kingpin",
+      coffea: "cytrus staff",
+      hacker: "jungleboard",
+    }
+  ],
+  plants: [
+    {
+      bractus: "bractus loaf",
+      coffea: "coffea cyl baby",
+      hacker: "hacker vibes vine sprout",
+    },
+    {
+      bractus: "bractus kid",
+      coffea: "coffea cyl kid",
+      hacker: "hacker vibes kid",
+    }
+  ],
+});
 
 let online = 0;
 let tickClock = 0;
@@ -61,7 +112,7 @@ let seedID = 0;
 let playerDatArr = [];
 
 /* takes seed, returns plant */
-const evolve = item => "plant." + item.split('.')[1];
+const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
 const devolve = item => "seeds." + item.split('.')[2];
 
@@ -110,6 +161,7 @@ app.get('/', (req, res) => {
             id
         } = plant;
         let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
+        console.log("kind: " + plant.kind)
         grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
     }
     grid += "</div>";
