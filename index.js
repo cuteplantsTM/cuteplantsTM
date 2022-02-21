@@ -130,6 +130,7 @@ app.get('/plant/:id/:seed', (req, res) => {
     let plant = plants.find(p => p.id == id); 
     plant.kind = evolve(seed);
     res.redirect("/farm");
+    return;
   }
   throw new Error("you don't have that kind of seed!");
 });
