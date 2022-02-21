@@ -1,5 +1,6 @@
 const express = require('express')
-const app = express()
+const fullApp = express()
+const app = express.Router();
 const port = 3008
 
 let idSeed = 0;
@@ -144,4 +145,5 @@ setInterval(() => {
     }
 }, 1000/5);
 
-app.listen(port, () => console.log(`Example app listening on port ${port}`))
+fullApp.use('/farm', app);
+fullApp.listen(port, () => console.log(`Example app listening on port ${port}`))
