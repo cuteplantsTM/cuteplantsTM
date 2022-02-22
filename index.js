@@ -108,6 +108,50 @@ const NAMES = flatten({
   ],
 });
 
+let online = 0;
+let tickClock = 0;
+let idPlayer = 0;
+const playerID = () => idPlayer++;
+let playerDatArr = [];
+
+function getPlayer(getID) {
+    console.log("player id to get: " + getID)
+    console.log("players ids ")
+    for (let player in playerDatArr) {
+        console.log(player.playerID)
+    }
+    if (playerDatArr.find((player) => player.playerID == getID)) {
+        return playerDatArr.find((player) => player.playerID == getID);
+    } else {
+        console.log("new player data")
+        newPlayer = {};
+
+        newPlayer.idSeed = 0;
+        newPlayer.seedID = () => newPlayer.idSeed++;
+
+        newPlayer.playerID = getID;
+        //populate inventory with default items
+        newPlayer.inv = [
+            "seeds.bractus",
+            "seeds.coffea",
+            "seeds.hacker"
+        ] 
+        newPlayer.farm = [];
+        newPlayer.ground = [];
+
+        for (let x = 0; x < 3; x++)
+            for (let y = 0; y < 3; y++)
+                newPlayer.farm.push({
+                    x,
+                    y,
+                    age: 0,
+                    id: newPlayer.seedID()
+                });
+        playerDatArr.push(newPlayer);
+        return newPlayer;
+    }
+}
+
 /* takes seed, returns plant */
 const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
@@ -152,18 +196,18 @@ const xpLevel = xp => {
 };
 
 
-let shouldReload = true;
+/*let shouldReload = true;
 let plants = [];
 let ground = [];
 for (let x = 0; x < 3; x++)
   for (let y = 0; y < 3; y++)
     if (x != y || x == 1)
-      plants.push({ x, y, age: 0, xp: 0, id: newId() });
+      plants.push({ x, y, age: 0, xp: 0, id:  });
 let inv = [
   "seeds.bractus",
   "seeds.coffea",
   "seeds.hacker"
-];
+];*/
 
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
@@ -218,9 +262,10 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id}) {
 
 app.get('/', (req, res) => {
   //on no save
-  if (req.session.isNew || typeof req.session.playerID === "undefined") {
+  if (req.session.isNew || typeof req.session.playerID == "undefined") {
       console.log("new session")
       req.session.playerID = playerID();
+      getPlayer(req.session.playerID);
   }
   let grid = '<div style="position:relative;">';
   for (let plant of getPlayer(req.session.playerID).farm) {
@@ -251,7 +296,7 @@ app.get('/', (req, res) => {
       ">lvl ${level}</p>`;
     }
   }
-  for (let item of ground) {
+  for (let item of getPlayer(req.session.playerID).ground) {
     let { x, y, id } = item;
     grid += imageHTML({
       pos: [x, y],
@@ -264,7 +309,7 @@ app.get('/', (req, res) => {
   grid += "</div>";
 
   res.send(`
-    <h1> You have ${inv.length} seeds. </h1>
+    <h1> You have ${getPlayer(req.session.playerID).inv.length} seeds. </h1>
     ${grid}
     <script>
     setInterval(async () => {
@@ -335,7 +380,6 @@ app.get('/plant/:id/:seed', (req, res) => {
     if (seedI >= 0) {
         getPlayer(req.session.playerID).inv.splice(seedI, 1);
         let plant = getPlayer(req.session.playerID).farm.find(p => p.id == id);
-        console.log("farm " + getPlayer(req.session.playerID).farm[0].id)
         plant.kind = evolve(seed);
         res.redirect("/farm");
         return;
@@ -355,11 +399,11 @@ setInterval(() => {
         shouldReload = true;
         plant.xp += 5;
         let [x, y] = axialHexToPixel([plant.x, plant.y]);
-        ground.push({
+        player.ground.push({
           kind: devolve(plant.kind),
           x: x + 120 * (Math.random()),
           y: y + 120 * (Math.random() * 0.25 + 0.8),
-          id: newId(),
+          id: player.seedID(),
         });
       }
     }
