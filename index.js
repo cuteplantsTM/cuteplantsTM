@@ -3,6 +3,9 @@ const fullApp = express()
 const app = express.Router();
 const port = 3008
 
+const TICK_SECS = 1/5;
+const TICK_MS = 1000 * TICK_SECS;
+
 let idSeed = 0;
 const newId = () => idSeed++;
 
@@ -96,12 +99,6 @@ const NAMES = flatten({
   ],
 });
 
-let inv = [
-  "seeds.bractus",
-  "seeds.coffea",
-  "seeds.hacker"
-];
-
 /* takes seed, returns plant */
 const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
@@ -139,48 +136,115 @@ const xpLevel = xp => {
   for (const lvlI in levels) {
     const lvlXp = levels[lvlI];
     if (xp < lvlXp)
-      return { level: lvlI, prog: xp / lvlXp, has: xp, needs: lvlXp };
+      return { level: lvlI, has: xp, needs: lvlXp };
     xp -= lvlXp;
   }
-  return { level: levels.length, prog: NaN, has: xp, needs: NaN };
+  return { level: levels.length, has: xp, needs: NaN };
 };
 
 
 let shouldReload = true;
 let plants = [];
+let ground = [];
 for (let x = 0; x < 3; x++)
   for (let y = 0; y < 3; y++)
     if (x != y || x == 1)
-      plants.push({ x, y, age: 0, id: newId() });
+      plants.push({ x, y, age: 0, xp: 0, id: newId() });
+let inv = [
+  "seeds.bractus",
+  "seeds.coffea",
+  "seeds.hacker"
+];
 
+const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
-function imageHTML({ size, href, art, pos }) {
+function imageHTML({ size, href, art, pos, zIndex }) {
   let style = `width:${size}px;height:${size}px;`;
-  if (pos) {
-    const [x, y] = pos;
-    style += `position:absolute;`;
-    style += `left:${x}px;top:${y}px;`;
-  }
+  if (pos) style += absPosStyle(pos);
+  if (zIndex) style += `z-index:${zIndex};`;
 
   let img = `<img src="${art}" style="${style}"></img>`;
   return`<a href="${href}"> ${img} </a>`;
 }
 
-const axialHexToPixel = (x, y) => [
-    80 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
-    80 * (                             3 /2 * y)
+const axialHexToPixel = ([x, y]) => [
+    90 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
+    90 * (                             3 /2 * y)
 ];
+
+function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id}) {
+    const width = 90;
+    const duration = (needs - has) * TICK_SECS;
+    const prog = has / needs;
+    return `
+    <div style="
+      ${absPosStyle([x, y])}
+      z-index:1;
+      padding:${pad}px;
+      width:${w}px;height:${h}px;
+      border-radius:5px;
+      background-color:${colors[0]};
+    "></div>
+    <style>
+      @keyframes xpbar_${id} {
+        from {
+          width: ${width * prog}px;
+        }
+        to {
+          width: ${width}px;
+        }
+      }
+    </style>
+    <div style="
+      ${absPosStyle([x + pad, y + pad])}
+      z-index:1;
+      height:10px;
+      border-radius:5px;
+      background-color:${colors[1]};
+      animation-duration:${duration}s;
+      animation-name:xpbar_${id};
+      animation-timing-function:linear;
+    "></div>`;
+}
 
 app.get('/', (req, res) => {
   let grid = '<div style="position:relative;">';
   for (let plant of plants) {
-    let { x, y, id } = plant;
-    let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
+    let { x, y, id, xp } = plant;
+    [x, y] = axialHexToPixel([x, y]);
     grid += imageHTML({
-      pos: axialHexToPixel(x, y),
+      pos: [x, y],
       size: 120,
       href: '/farm/plant/' + id,
-      art
+      art: ART[plant.kind ? plant.kind : 'dirt']
+    });
+
+    if (plant.kind) {
+      const { level, has, needs } = xpLevel(xp);
+      grid += progBar({
+        size: [90, 10],
+        pad: 5,
+        pos: [x + 14, y + 128],
+        colors: ["skyblue", "blue"],
+        has,
+        needs,
+        id,
+      });
+      grid += `<p style="
+        ${absPosStyle([x + 128*0.35, y + 138])}
+        z-index:1;
+        font-family: monospace;
+      ">lvl ${level}</p>`;
+    }
+  }
+  for (let item of ground) {
+    let { x, y, id } = item;
+    grid += imageHTML({
+      pos: [x, y],
+      size: 30,
+      zIndex: 2,
+      href: '/farm/grab/' + id,
+      art: ART[item.kind]
     });
   }
   grid += "</div>";
@@ -195,7 +259,7 @@ app.get('/', (req, res) => {
 
       if (reload)
         window.location.reload();
-    }, 1000/5);
+    }, ${TICK_MS});
     </script>
   `);
 })
@@ -229,6 +293,16 @@ app.get('/plant/:id', (req, res) => {
   res.redirect("/farm");
 });
 
+app.get('/grab/:id', (req, res) => {
+  const { id } = req.params;
+
+  let itemI = ground.findIndex(i => i.id == id); 
+  console.log(itemI);
+  if (itemI > -1)
+    inv.push(ground.splice(itemI, 1)[0].kind);
+  res.redirect("/farm");
+});
+
 app.get('/plant/:id/:seed', (req, res) => {
   const { id, seed } = req.params;
 
@@ -247,12 +321,22 @@ setInterval(() => {
   for (let plant of plants)
     if (plant.kind) {
       plant.age++;
-      if (plant.age % 49 == 0) {
+      plant.xp++;
+      if (xpLevel(plant.xp).level != xpLevel(plant.xp-1).level)
         shouldReload = true;
-        inv.push(devolve(plant.kind));
+      if (plant.age % 158 == 0) {
+        shouldReload = true;
+        plant.xp += 5;
+        let [x, y] = axialHexToPixel([plant.x, plant.y]);
+        ground.push({
+          kind: devolve(plant.kind),
+          x: x + 120 * (Math.random()),
+          y: y + 120 * (Math.random() * 0.25 + 0.8),
+          id: newId(),
+        });
       }
     }
-}, 1000/5);
+}, TICK_MS);
 
 fullApp.use('/farm', app);
 fullApp.listen(port, () => console.log(`Example app listening on port ${port}`))
