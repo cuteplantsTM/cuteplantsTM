@@ -154,13 +154,14 @@ for (let x = 0; x < 3; x++)
       plants.push({ x, y, age: 0, id: newId() });
 
 
+function absPosStyle([x, y]) {
+  return `position:absolute;` +
+         `left:${x}px;top:${y}px;`;
+}
+
 function imageHTML({ size, href, art, pos }) {
   let style = `width:${size}px;height:${size}px;`;
-  if (pos) {
-    const [x, y] = pos;
-    style += `position:absolute;`;
-    style += `left:${x}px;top:${y}px;`;
-  }
+  if (pos) style += absPosStyle(pos);
 
   let img = `<img src="${art}" style="${style}"></img>`;
   return`<a href="${href}"> ${img} </a>`;
@@ -175,13 +176,37 @@ app.get('/', (req, res) => {
   let grid = '<div style="position:relative;">';
   for (let plant of plants) {
     let { x, y, id } = plant;
-    let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
+    [x, y] = axialHexToPixel(x, y);
     grid += imageHTML({
-      pos: axialHexToPixel(x, y),
+      pos: [x, y],
       size: 120,
       href: '/farm/plant/' + id,
-      art
+      art: ART[plant.kind ? plant.kind : 'dirt']
     });
+
+    let outer = absPosStyle([x + 16, y + 128]);
+    outer += "width:100px;height:20px;";
+    outer += "border-radius:5px;";
+    outer += "background-color:skyblue;";
+    grid += `<div style="${outer}"></div>`;
+
+    grid += `<style>
+      @keyframes xpbar_${id} {
+        from {
+          width: 0px;
+        }
+        to {
+          width: 90px;
+        }
+      }
+    </style>`;
+    let inner = absPosStyle([x + 16 + 5, y + 128 + 5]);
+    inner += "width:90px;height:10px;";
+    inner += "border-radius:5px;";
+    inner += "background-color:blue;";
+    inner += "animation-duration:3s;";
+    inner += `animation-name:xpbar_${id};`;
+    grid += `<div style="${inner}"></div>`;
   }
   grid += "</div>";
 
@@ -247,8 +272,10 @@ setInterval(() => {
   for (let plant of plants)
     if (plant.kind) {
       plant.age++;
+      plant.xp++;
       if (plant.age % 49 == 0) {
         shouldReload = true;
+        plant.xp += 5;
         inv.push(devolve(plant.kind));
       }
     }
