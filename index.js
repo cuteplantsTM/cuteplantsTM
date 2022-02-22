@@ -107,24 +107,51 @@ const NAMES = flatten({
 
 let online = 0;
 let tickClock = 0;
-let playerID = 0;
-let seedID = 0;
+let idPlayer = 0;
+const playerID = () => idPlayer++;
 let playerDatArr = [];
 
-function updateDat(player) {
-    let globDat = playerDatArr.find((dat) => dat.playerID == player.playerID);
-    globDat = player;
-}
+function getPlayer(getID) {
+    console.log("player id to get: " + getID)
+    console.log("players ids ")
+    for (let player in playerDatArr) {
+        console.log(player.playerID)
+    }
+    if (playerDatArr.find((player) => player.playerID == getID)) {
+        return playerDatArr.find((player) => player.playerID == getID);
+    } else {
+        console.log("new player data")
+        newPlayer = {};
 
-function getPl(playerID) {
-    return playerDatArr.find((player) => player.playerID == playerID);
+        newPlayer.idSeed = 0;
+        newPlayer.seedID = () => newPlayer.idSeed++;
+
+        newPlayer.playerID = playerID();
+        //populate inventory with default items
+        newPlayer.inv = [
+            "seeds.bractus",
+            "seeds.coffea",
+            "seeds.hacker"
+        ] 
+        newPlayer.farm = [];
+
+        for (let x = 0; x < 3; x++)
+            for (let y = 0; y < 3; y++)
+                newPlayer.farm.push({
+                    x,
+                    y,
+                    age: 0,
+                    id: newPlayer.seedID()
+                });
+        playerDatArr.push(newPlayer);
+        return newPlayer;
+    }
 }
 
 /* takes seed, returns plant */
 const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
 const devolve = item => "seeds." + item.split('.')[2];
-
 
 function imageHTML(x, y, size, href, art) {
     let style = `position:absolute;`;
@@ -138,50 +165,26 @@ function imageHTML(x, y, size, href, art) {
 
 app.get('/', (req, res) => {
     //on no save
-    if (typeof req.session.sav == "undefined") {
-        req.session.sav = {};
-        //populate inventory with default items
-        req.session.sav.inv = [
-            "seeds.bractus",
-            "seeds.coffea",
-            "seeds.hacker"
-        ] 
-        req.session.sav.farm = [];
-
-        for (let x = 0; x < 3; x++)
-            for (let y = 0; y < 3; y++)
-                req.session.sav.farm.push({
-                    x,
-                    y,
-                    age: 0,
-                    id: seedID++
-                });
-        updateDat(req.session.sav);
-        req.session.sav.shouldReload = true;
-    } else /* if theres a cookie save, grab the global updates*/ {
-        req.session.sav = getPl(req.session.sav.playerID);
+    if (req.session.isNew || typeof req.session.playerID === "undefined") {
+        console.log("new session")
+        req.session.playerID = playerID();
     }
 
     let grid = '<div style="position:relative;">';
-    //console.log(req.session.sav.farm);
-    for (let plant of req.session.sav.farm) {
+    for (let plant of getPlayer(req.session.playerID).farm) {
         let {
             x,
             y,
-            id
+            id,
         } = plant;
         let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
         grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
     }
     grid += "</div>";
 
-    updateDat(req.session.sav);
-
-    console.log("farm: " + req.session.sav.farm)
-
     res.send(`
         <title>cuteplantsTM ${online} Online</title>
-        <h1> You have ${req.session.sav.inv.length} seeds. </h1>
+        <h1> You have ${getPlayer(req.session.playerID).inv.length} seeds. </h1>
         ${grid}
         <script>
         setInterval(async () => {
@@ -192,37 +195,37 @@ app.get('/', (req, res) => {
 
           if (reload)
             window.location.reload();
-        }, 1000/10);
+        }, 1000/5);
         </script>
     `);
 
 })
 
 app.get('/shouldreload', (req, res) => {
-    if (req.session.sav.shouldReload)
-        req.session.sav.shouldReload = !req.session.sav.shouldReload;
     res.send({
-        reload: req.session.sav.shouldReload
+        reload: getPlayer(req.session.playerID).shouldReload
     });
+    if (getPlayer(req.session.playerID).shouldReload)
+        getPlayer(req.session.playerID).shouldReload = false;
 });
 
 app.get('/plant/:id', (req, res) => {
-    req.session.sav = getPl(req.session.sav.playerID);
     const {
         id
     } = req.params;
 
-    if (req.session.sav.inv.length >= 1) {
+    if (getPlayer(req.session.playerID).inv.length >= 1) {
         let page = '<h2>';
         page += 'These are the seeds you have in your inventory:';
         page += '</h2>';
         page += '<div style="position:relative;">';
         let x = 0;
-        for (let item of req.session.sav.inv ) {
+        for (let item of getPlayer(req.session.playerID).inv ) {
             let link = `/farm/plant/${id}/${item}`;
             page += imageHTML(x++, 0, 30, link, ART[item]);
         }
         page += '</div>';
+
 
         res.send(page);
 
@@ -237,28 +240,26 @@ app.get('/plant/:id/:seed', (req, res) => {
         seed
     } = req.params;
 
-    let seedI = req.session.sav.inv.indexOf(seed);
+    let seedI = getPlayer(req.session.playerID).inv.indexOf(seed);
 
     if (seedI >= 0) {
-        req.session.sav.inv.splice(seedI, 1);
-        let plant = req.session.sav.farm.find(p => p.id == id);
+        getPlayer(req.session.playerID).inv.splice(seedI, 1);
+        let plant = getPlayer(req.session.playerID).farm.find(p => p.id == id);
+        console.log("farm " + getPlayer(req.session.playerID).farm[0].id)
         plant.kind = evolve(seed);
         res.redirect("/farm");
         return;
     }
     throw new Error("you don't have that kind of seed!");
-    updateDat(req.session.sav);
 });
 
 setInterval(() => {
     tickClock++
     for (let player of playerDatArr) {
-        console.log("player: " + player)
         for (let plant of player.farm) {
             if (plant.kind) {
                 plant.age++;
                 if (plant.age % 49 == 0) {
-                    console.log("tick plant")
                     player.shouldReload = true;
                     player.inv.push(devolve(plant.kind));
                 }
