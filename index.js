@@ -3,6 +3,9 @@ const fullApp = express()
 const app = express.Router();
 const port = 3008
 
+const TICK_SECS = 1/5;
+const TICK_MS = 1000 * TICK_SECS;
+
 let idSeed = 0;
 const newId = () => idSeed++;
 
@@ -139,10 +142,10 @@ const xpLevel = xp => {
   for (const lvlI in levels) {
     const lvlXp = levels[lvlI];
     if (xp < lvlXp)
-      return { level: lvlI, prog: xp / lvlXp, has: xp, needs: lvlXp };
+      return { level: lvlI, has: xp, needs: lvlXp };
     xp -= lvlXp;
   }
-  return { level: levels.length, prog: NaN, has: xp, needs: NaN };
+  return { level: levels.length, has: xp, needs: NaN };
 };
 
 
@@ -151,7 +154,7 @@ let plants = [];
 for (let x = 0; x < 3; x++)
   for (let y = 0; y < 3; y++)
     if (x != y || x == 1)
-      plants.push({ x, y, age: 0, id: newId() });
+      plants.push({ x, y, age: 0, xp: 0, id: newId() });
 
 
 function absPosStyle([x, y]) {
@@ -168,14 +171,49 @@ function imageHTML({ size, href, art, pos }) {
 }
 
 const axialHexToPixel = (x, y) => [
-    80 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
-    80 * (                             3 /2 * y)
+    90 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
+    90 * (                             3 /2 * y)
 ];
+
+function xpBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id}) {
+    const width = 90;
+    const duration = (needs - has) * TICK_SECS;
+    const prog = has / needs;
+    return `
+    <div style="
+      ${absPosStyle([x, y])}
+      z-index:1;
+      padding:${pad}px;
+      width:${w}px;height:${h}px;
+      border-radius:5px;
+      background-color:${colors[0]};
+    "></div>
+    <style>
+      @keyframes xpbar_${id} {
+        from {
+          width: ${width * prog}px;
+        }
+        to {
+          width: ${width}px;
+        }
+      }
+    </style>
+    <div style="
+      ${absPosStyle([x + pad, y + pad])}
+      z-index:1;
+      height:10px;
+      border-radius:5px;
+      background-color:${colors[1]};
+      animation-duration:${duration}s;
+      animation-name:xpbar_${id};
+      animation-timing-function:linear;
+    "></div>`;
+}
 
 app.get('/', (req, res) => {
   let grid = '<div style="position:relative;">';
   for (let plant of plants) {
-    let { x, y, id } = plant;
+    let { x, y, id, xp } = plant;
     [x, y] = axialHexToPixel(x, y);
     grid += imageHTML({
       pos: [x, y],
@@ -184,29 +222,23 @@ app.get('/', (req, res) => {
       art: ART[plant.kind ? plant.kind : 'dirt']
     });
 
-    let outer = absPosStyle([x + 16, y + 128]);
-    outer += "width:100px;height:20px;";
-    outer += "border-radius:5px;";
-    outer += "background-color:skyblue;";
-    grid += `<div style="${outer}"></div>`;
-
-    grid += `<style>
-      @keyframes xpbar_${id} {
-        from {
-          width: 0px;
-        }
-        to {
-          width: 90px;
-        }
-      }
-    </style>`;
-    let inner = absPosStyle([x + 16 + 5, y + 128 + 5]);
-    inner += "width:90px;height:10px;";
-    inner += "border-radius:5px;";
-    inner += "background-color:blue;";
-    inner += "animation-duration:3s;";
-    inner += `animation-name:xpbar_${id};`;
-    grid += `<div style="${inner}"></div>`;
+    if (plant.kind) {
+      const { level, has, needs } = xpLevel(xp);
+      grid += xpBar({
+        size: [90, 10],
+        pad: 5,
+        pos: [x + 14, y + 128],
+        colors: ["skyblue", "blue"],
+        has,
+        needs,
+        id,
+      });
+      grid += `<p style="
+        ${absPosStyle([x + 128*0.35, y + 138])}
+        z-index:1;
+        font-family: monospace;
+      ">lvl ${level}</p>`;
+    }
   }
   grid += "</div>";
 
@@ -220,7 +252,7 @@ app.get('/', (req, res) => {
 
       if (reload)
         window.location.reload();
-    }, 1000/5);
+    }, ${TICK_MS});
     </script>
   `);
 })
@@ -273,13 +305,15 @@ setInterval(() => {
     if (plant.kind) {
       plant.age++;
       plant.xp++;
-      if (plant.age % 49 == 0) {
+      if (xpLevel(plant.xp).level != xpLevel(plant.xp-1).level)
+        shouldReload = true;
+      if (plant.age % 158 == 0) {
         shouldReload = true;
         plant.xp += 5;
         inv.push(devolve(plant.kind));
       }
     }
-}, 1000/5);
+}, TICK_MS);
 
 fullApp.use('/farm', app);
 fullApp.listen(port, () => console.log(`Example app listening on port ${port}`))
