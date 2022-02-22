@@ -141,12 +141,13 @@ function getPlayer(getID) {
 
         for (let x = 0; x < 3; x++)
             for (let y = 0; y < 3; y++)
-                newPlayer.farm.push({
-                    x: x,
-                    y: y,
-                    age: 0,
-                    id: newPlayer.seedID()
-                });
+                if (x != y || x == 1)
+                    newPlayer.farm.push({
+                        x: x,
+                        y: y,
+                        age: 0,
+                        id: newPlayer.seedID()
+                    });
         playerDatArr.push(newPlayer);
         return newPlayer;
     }
