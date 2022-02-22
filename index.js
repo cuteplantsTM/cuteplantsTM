@@ -142,8 +142,8 @@ function getPlayer(getID) {
         for (let x = 0; x < 3; x++)
             for (let y = 0; y < 3; y++)
                 newPlayer.farm.push({
-                    x,
-                    y,
+                    x: x,
+                    y: y,
                     age: 0,
                     id: newPlayer.seedID()
                 });
@@ -194,20 +194,6 @@ const xpLevel = xp => {
   }
   return { level: levels.length, has: xp, needs: NaN };
 };
-
-
-/*let shouldReload = true;
-let plants = [];
-let ground = [];
-for (let x = 0; x < 3; x++)
-  for (let y = 0; y < 3; y++)
-    if (x != y || x == 1)
-      plants.push({ x, y, age: 0, xp: 0, id:  });
-let inv = [
-  "seeds.bractus",
-  "seeds.coffea",
-  "seeds.hacker"
-];*/
 
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
@@ -324,11 +310,8 @@ app.get('/', (req, res) => {
 })
 
 app.get('/shouldreload', (req, res) => {
-    res.send({
-        reload: getPlayer(req.session.playerID).shouldReload
-    });
-    if (getPlayer(req.session.playerID).shouldReload)
-        getPlayer(req.session.playerID).shouldReload = false;
+  res.send({ reload: getPlayer(req.session.playerID).shouldReload });
+  getPlayer(req.session.playerID).shouldReload = false;
 });
 
 app.get('/plant/:id', (req, res) => {
@@ -362,10 +345,10 @@ app.get('/plant/:id', (req, res) => {
 app.get('/grab/:id', (req, res) => {
   const { id } = req.params;
 
-  let itemI = ground.findIndex(i => i.id == id); 
+  let itemI = getPlayer(req.session.playerID).ground.findIndex(i => i.id == id); 
   console.log(itemI);
   if (itemI > -1)
-    inv.push(ground.splice(itemI, 1)[0].kind);
+    getPlayer(req.session.playerID).inv.push(getPlayer(req.session.playerID).ground.splice(itemI, 1)[0].kind);
   res.redirect("/farm");
 });
 
@@ -380,6 +363,8 @@ app.get('/plant/:id/:seed', (req, res) => {
     if (seedI >= 0) {
         getPlayer(req.session.playerID).inv.splice(seedI, 1);
         let plant = getPlayer(req.session.playerID).farm.find(p => p.id == id);
+        plant.xp = 0;
+        plant.age = 0;
         plant.kind = evolve(seed);
         res.redirect("/farm");
         return;
@@ -394,9 +379,9 @@ setInterval(() => {
       plant.age++;
       plant.xp++;
       if (xpLevel(plant.xp).level != xpLevel(plant.xp-1).level)
-        shouldReload = true;
+        player.shouldReload = true;
       if (plant.age % 158 == 0) {
-        shouldReload = true;
+        player.shouldReload = true;
         plant.xp += 5;
         let [x, y] = axialHexToPixel([plant.x, plant.y]);
         player.ground.push({
