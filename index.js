@@ -15,6 +15,9 @@ app.use(function (req, res, next) {
   next()
 })
 
+const TICK_SECS = 1/5;
+const TICK_MS = 1000 * TICK_SECS;
+
 /* EXAMPLE:
  * in:
  *  flatten({
@@ -105,100 +108,174 @@ const NAMES = flatten({
   ],
 });
 
-let online = 0;
-let tickClock = 0;
-let idPlayer = 0;
-const playerID = () => idPlayer++;
-let playerDatArr = [];
-
-function getPlayer(getID) {
-    console.log("player id to get: " + getID)
-    console.log("players ids ")
-    for (let player in playerDatArr) {
-        console.log(player.playerID)
-    }
-    if (playerDatArr.find((player) => player.playerID == getID)) {
-        return playerDatArr.find((player) => player.playerID == getID);
-    } else {
-        console.log("new player data")
-        newPlayer = {};
-
-        newPlayer.idSeed = 0;
-        newPlayer.seedID = () => newPlayer.idSeed++;
-
-        newPlayer.playerID = playerID();
-        //populate inventory with default items
-        newPlayer.inv = [
-            "seeds.bractus",
-            "seeds.coffea",
-            "seeds.hacker"
-        ] 
-        newPlayer.farm = [];
-
-        for (let x = 0; x < 3; x++)
-            for (let y = 0; y < 3; y++)
-                newPlayer.farm.push({
-                    x,
-                    y,
-                    age: 0,
-                    id: newPlayer.seedID()
-                });
-        playerDatArr.push(newPlayer);
-        return newPlayer;
-    }
-}
-
 /* takes seed, returns plant */
 const evolve = item => "plants.0." + item.split('.')[1];
 /* takes plant, returns seed */
 const devolve = item => "seeds." + item.split('.')[2];
 
-function imageHTML(x, y, size, href, art) {
-    let style = `position:absolute;`;
-    style += `left:${x*120}px;top:${y*120}px;`;
-    style += `width:120px;height:120px;`;
+const levels = [
+  0,
+  120,
+  280,
+  480,
+  720,
+  1400,
+  1700,
+  2100,
+  2700,
+  3500,
+  6800,
+  7700,
+  8800,
+  10100,
+  11600,
+  22000,
+  24000,
+  26500,
+  29500,
+  33000,
+  37000,
+  41500,
+  46500,
+  52000,
+  99991,
+];
 
-    let img = `<img src="${art}" style="${style}"></img>`;
+const xpLevel = xp => {
+  for (const lvlI in levels) {
+    const lvlXp = levels[lvlI];
+    if (xp < lvlXp)
+      return { level: lvlI, has: xp, needs: lvlXp };
+    xp -= lvlXp;
+  }
+  return { level: levels.length, has: xp, needs: NaN };
+};
 
-    return `<a href="${href}"> ${img} </a>`;
+
+let shouldReload = true;
+let plants = [];
+let ground = [];
+for (let x = 0; x < 3; x++)
+  for (let y = 0; y < 3; y++)
+    if (x != y || x == 1)
+      plants.push({ x, y, age: 0, xp: 0, id: newId() });
+let inv = [
+  "seeds.bractus",
+  "seeds.coffea",
+  "seeds.hacker"
+];
+
+const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
+
+function imageHTML({ size, href, art, pos, zIndex }) {
+  let style = `width:${size}px;height:${size}px;`;
+  if (pos) style += absPosStyle(pos);
+  if (zIndex) style += `z-index:${zIndex};`;
+
+  let img = `<img src="${art}" style="${style}"></img>`;
+  return`<a href="${href}"> ${img} </a>`;
+}
+
+const axialHexToPixel = ([x, y]) => [
+    90 * (Math.sqrt(3) * x + Math.sqrt(3)/2 * y),
+    90 * (                             3 /2 * y)
+];
+
+function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id}) {
+    const width = 90;
+    const duration = (needs - has) * TICK_SECS;
+    const prog = has / needs;
+    return `
+    <div style="
+      ${absPosStyle([x, y])}
+      z-index:1;
+      padding:${pad}px;
+      width:${w}px;height:${h}px;
+      border-radius:5px;
+      background-color:${colors[0]};
+    "></div>
+    <style>
+      @keyframes xpbar_${id} {
+        from {
+          width: ${width * prog}px;
+        }
+        to {
+          width: ${width}px;
+        }
+      }
+    </style>
+    <div style="
+      ${absPosStyle([x + pad, y + pad])}
+      z-index:1;
+      height:10px;
+      border-radius:5px;
+      background-color:${colors[1]};
+      animation-duration:${duration}s;
+      animation-name:xpbar_${id};
+      animation-timing-function:linear;
+    "></div>`;
 }
 
 app.get('/', (req, res) => {
-    //on no save
-    if (req.session.isNew || typeof req.session.playerID === "undefined") {
-        console.log("new session")
-        req.session.playerID = playerID();
+  //on no save
+  if (req.session.isNew || typeof req.session.playerID === "undefined") {
+      console.log("new session")
+      req.session.playerID = playerID();
+  }
+  let grid = '<div style="position:relative;">';
+  for (let plant of getPlayer(req.session.playerID).farm) {
+    let { x, y, id, xp } = plant;
+    [x, y] = axialHexToPixel([x, y]);
+    grid += imageHTML({
+      pos: [x, y],
+      size: 120,
+      href: '/farm/plant/' + id,
+      art: ART[plant.kind ? plant.kind : 'dirt']
+    });
+
+    if (plant.kind) {
+      const { level, has, needs } = xpLevel(xp);
+      grid += progBar({
+        size: [90, 10],
+        pad: 5,
+        pos: [x + 14, y + 128],
+        colors: ["skyblue", "blue"],
+        has,
+        needs,
+        id,
+      });
+      grid += `<p style="
+        ${absPosStyle([x + 128*0.35, y + 138])}
+        z-index:1;
+        font-family: monospace;
+      ">lvl ${level}</p>`;
     }
+  }
+  for (let item of ground) {
+    let { x, y, id } = item;
+    grid += imageHTML({
+      pos: [x, y],
+      size: 30,
+      zIndex: 2,
+      href: '/farm/grab/' + id,
+      art: ART[item.kind]
+    });
+  }
+  grid += "</div>";
 
-    let grid = '<div style="position:relative;">';
-    for (let plant of getPlayer(req.session.playerID).farm) {
-        let {
-            x,
-            y,
-            id,
-        } = plant;
-        let art = (plant.kind) ? ART[plant.kind] : ART.dirt;
-        grid += imageHTML(x, y, 120, '/farm/plant/' + id, art);
-    }
-    grid += "</div>";
+  res.send(`
+    <h1> You have ${inv.length} seeds. </h1>
+    ${grid}
+    <script>
+    setInterval(async () => {
+      let res = await fetch("/farm/shouldreload");
+      let { reload } = await res.json();
 
-    res.send(`
-        <title>cuteplantsTM ${online} Online</title>
-        <h1> You have ${getPlayer(req.session.playerID).inv.length} seeds. </h1>
-        ${grid}
-        <script>
-        setInterval(async () => {
-          let res = await fetch("/farm/shouldreload");
-          let { reload } = await res.json();
-
-          console.log(reload);
-
-          if (reload)
-            window.location.reload();
-        }, 1000/5);
-        </script>
-    `);
-
+      if (reload)
+        window.location.reload();
+    }, ${TICK_MS});
+    </script>
+  `);
 })
 
 app.get('/shouldreload', (req, res) => {
@@ -221,8 +298,11 @@ app.get('/plant/:id', (req, res) => {
         page += '<div style="position:relative;">';
         let x = 0;
         for (let item of getPlayer(req.session.playerID).inv ) {
-            let link = `/farm/plant/${id}/${item}`;
-            page += imageHTML(x++, 0, 30, link, ART[item]);
+            page += imageHTML({
+              size: 120,
+              href: `/farm/plant/${id}/${item}`,
+              art: ART[item]
+            });
         }
         page += '</div>';
 
@@ -232,6 +312,16 @@ app.get('/plant/:id', (req, res) => {
         return;
     }
     res.redirect("/farm");
+});
+
+app.get('/grab/:id', (req, res) => {
+  const { id } = req.params;
+
+  let itemI = ground.findIndex(i => i.id == id); 
+  console.log(itemI);
+  if (itemI > -1)
+    inv.push(ground.splice(itemI, 1)[0].kind);
+  res.redirect("/farm");
 });
 
 app.get('/plant/:id/:seed', (req, res) => {
@@ -254,19 +344,27 @@ app.get('/plant/:id/:seed', (req, res) => {
 });
 
 setInterval(() => {
-    tickClock++
-    for (let player of playerDatArr) {
-        for (let plant of player.farm) {
-            if (plant.kind) {
-                plant.age++;
-                if (plant.age % 49 == 0) {
-                    player.shouldReload = true;
-                    player.inv.push(devolve(plant.kind));
-                }
-            }
-        }
+  for (let player of playerDatArr) {
+    for (let plant of player.farm)
+    if (plant.kind) {
+      plant.age++;
+      plant.xp++;
+      if (xpLevel(plant.xp).level != xpLevel(plant.xp-1).level)
+        shouldReload = true;
+      if (plant.age % 158 == 0) {
+        shouldReload = true;
+        plant.xp += 5;
+        let [x, y] = axialHexToPixel([plant.x, plant.y]);
+        ground.push({
+          kind: devolve(plant.kind),
+          x: x + 120 * (Math.random()),
+          y: y + 120 * (Math.random() * 0.25 + 0.8),
+          id: newId(),
+        });
+      }
     }
-}, 1000 / 5);
+  }
+}, TICK_MS);
 
 fullApp.use('/farm', app);
 fullApp.listen(port, () => console.log(`Example app listening on port ${port}`))
