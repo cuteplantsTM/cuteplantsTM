@@ -150,6 +150,8 @@ function getPlayer(p_id) {
   }
 }
 
+const invMap = inv => inv.reduce((map, i) => map.set(i, 1 + (map.get(i) ?? 0)), new Map());
+
 /* takes seed, returns plant */
 const evolve = (item) => "plants.0." + item.split(".")[1];
 /* takes plant, returns seed */
@@ -181,7 +183,11 @@ function imageHTML(opts) {
   if (opts.style) style += opts.style;
 
   let img = `<img src="${art}" style="${style}"></img>`;
-  return `<a href="${href}"> ${img} </a>`;
+
+  if (href)
+    return `<a href="${href}"> ${img} </a>`;
+  else
+    return img;
 }
 
 const axialHexToPixel = ([x, y]) => [
@@ -224,16 +230,9 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
     "></div>`;
 }
 
-app.get("/", (req, res) => {
-  //on no save
-  if (req.session.isNew || typeof req.session.playerId == "undefined") {
-    req.session.playerId = newId();
-    getPlayer(req.session.playerId);
-  }
-
-  const { farm, ground } = getPlayer(req.session.playerId);
-
+function farmGridHTML({ ground, farm }) {
   let grid = '<div style="position:relative;">';
+
   for (let plant of farm) {
     let { x, y, id, xp } = plant;
     [x, y] = axialHexToPixel([x, y]);
@@ -299,9 +298,42 @@ app.get("/", (req, res) => {
   }
   grid += "</div>";
 
+  return grid;
+}
+
+function invGridHTML({ inv, href = () => undefined, pos }) {
+  let grid = `<div style="display:flex;${absPosStyle(pos)}">`;
+
+  for (const [item, count] of invMap(inv)) {
+    grid += `<div style="padding:10px;">`;
+    grid += imageHTML({ size: 50, art: ART[item], href: href(item) });
+    grid += `<p style="
+      z-index:1;
+      font-family: monospace;
+      margin: 0px;
+      position: relative;
+      top: -5px;
+      left: 30px;
+    ">${count}x</p>`;
+    grid += "</div>";
+  }
+
+  grid += "</div>";
+  return grid;
+}
+
+app.get("/", (req, res) => {
+  //on no save
+  if (req.session.isNew || typeof req.session.playerId == "undefined") {
+    req.session.playerId = newId();
+    getPlayer(req.session.playerId);
+  }
+
+  const { farm, ground, inv } = getPlayer(req.session.playerId);
+
   res.send(`
-    <h1> You have ${getPlayer(req.session.playerId).inv.length} seeds. </h1>
-    ${grid}
+    ${farmGridHTML({ ground, farm })}
+    ${invGridHTML({ inv, pos: [650, 40] })}
     <script>
     setInterval(async () => {
       let res = await fetch("/farm/shouldreload");
@@ -328,17 +360,7 @@ app.get("/plant/:id", (req, res) => {
     let page = "<h2>";
     page += "These are the seeds you have in your inventory:";
     page += "</h2>";
-    page += '<div style="position:relative;">';
-    let x = 0;
-    for (let item of inv) {
-      page += imageHTML({
-        size: 120,
-        href: `/farm/plant/${id}/${item}`,
-        art: ART[item],
-      });
-    }
-    page += "</div>";
-
+    page += invGridHTML({ inv, pos: [50, 50], href: item => `/farm/plant/${id}/${item}` });
     res.send(page);
 
     return;
