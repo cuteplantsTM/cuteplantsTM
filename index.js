@@ -135,6 +135,9 @@ function getPlayer(p_id) {
     newPlayer.inv = ["seeds.bractus", "seeds.coffea", "seeds.hacker"];
     newPlayer.farm = [];
     newPlayer.ground = [];
+    /* ghosts are items that were on the ground that linger for a bit
+       so that they can be animated as they move to the inventory */
+    newPlayer.ghosts = [];
 
     for (let x = 0; x < 3; x++)
       for (let y = 0; y < 3; y++)
@@ -230,7 +233,8 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
     "></div>`;
 }
 
-function farmGridHTML({ ground, farm }) {
+const INV_GRID_POS = [650, 40];
+function farmGridHTML({ ground, farm, ghosts }) {
   let grid = '<div style="position:relative;">';
 
   for (let plant of farm) {
@@ -262,7 +266,7 @@ function farmGridHTML({ ground, farm }) {
     }
   }
 
-  for (let item of ground) {
+  for (let item of ground.concat(ghosts)) {
     let { x, y, id, spawned } = item;
 
     let style = `z-index:2;`;
@@ -283,6 +287,24 @@ function farmGridHTML({ ground, farm }) {
           to {
             left: ${item.x}px;
             top: ${item.y}px;
+          }
+        }
+      </style>`;
+    }
+
+    if (ghosts.includes(item)) {
+      style += `animation:item_${id} 0.6s ease-in;animation-fill-mode:forwards;`;
+      const [to_x, to_y] = INV_GRID_POS;
+      grid += `<style>
+        @keyframes item_${id} {
+          from {
+            left: ${item.x}px;
+            top: ${item.y}px;
+          }
+          to {
+            left: ${to_x}px;
+            top: ${to_y}px;
+            transform: scale(0);
           }
         }
       </style>`;
@@ -329,11 +351,11 @@ app.get("/", (req, res) => {
     getPlayer(req.session.playerId);
   }
 
-  const { farm, ground, inv } = getPlayer(req.session.playerId);
+  const { farm, ground, ghosts, inv } = getPlayer(req.session.playerId);
 
   res.send(`
-    ${farmGridHTML({ ground, farm })}
-    ${invGridHTML({ inv, pos: [650, 40] })}
+    ${farmGridHTML({ ground, farm, ghosts })}
+    ${invGridHTML({ inv, pos: INV_GRID_POS })}
     <script>
     setInterval(async () => {
       let res = await fetch("/farm/shouldreload");
@@ -370,11 +392,15 @@ app.get("/plant/:id", (req, res) => {
 
 app.get("/grab/:id", (req, res) => {
   const { id } = req.params;
-  const { inv, ground } = getPlayer(req.session.playerId);
+  const { inv, ground, ghosts } = getPlayer(req.session.playerId);
 
   let itemI = ground.findIndex((i) => i.id == id);
-  if (itemI > -1)
-    inv.push(ground.splice(itemI, 1)[0].kind);
+  if (itemI > -1) {
+    const [item] = ground.splice(itemI, 1);
+    inv.push(item.kind);
+    ghosts.push(item);
+    setTimeout(() => ghosts.splice(ghosts.indexOf(item), 1), 500);
+  }
 
   res.redirect("/farm");
 });

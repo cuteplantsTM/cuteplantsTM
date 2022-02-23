@@ -3,7 +3,7 @@ make an issue when you start working on one of these
 [x] hex grid
 [x] multiple users
 [ ] show # users online
-[ ] show inventory
+[x] show inventory
 [x] fix seed selection CSS
 [x] plant xp
 [ ] collect nearby seeds also
