@@ -117,11 +117,11 @@ const NAMES = flatten({
 
 let online = 0;
 let tickClock = 0;
-const playerId = (() => {
-  let idPlayer = 0;
-  return () => idPlayer++;
-})();
 let players = [];
+const newId = (() => {
+  let idGenerator = 0;
+  return () => idGenerator++;
+})();
 
 function getPlayer(p_id) {
   if (players.find((player) => player.playerId == p_id)) {
@@ -129,12 +129,8 @@ function getPlayer(p_id) {
   } else {
     newPlayer = {};
 
-    newPlayer.seedId = (() => {
-      let idSeed = 0;
-      return () => newPlayer.idSeed++;
-    })();
-
     newPlayer.playerId = p_id;
+
     //populate inventory with default items
     newPlayer.inv = ["seeds.bractus", "seeds.coffea", "seeds.hacker"];
     newPlayer.farm = [];
@@ -147,7 +143,7 @@ function getPlayer(p_id) {
             x: x,
             y: y,
             age: 0,
-            id: newPlayer.seedId(),
+            id: newId(),
           });
     players.push(newPlayer);
     return newPlayer;
@@ -229,7 +225,7 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
 app.get("/", (req, res) => {
   //on no save
   if (req.session.isNew || typeof req.session.playerId == "undefined") {
-    req.session.playerId = playerId();
+    req.session.playerId = newId();
     getPlayer(req.session.playerId);
   }
 
@@ -369,7 +365,7 @@ setInterval(() => {
             kind: devolve(plant.kind),
             x: x + 120 * Math.random(),
             y: y + 120 * (Math.random() * 0.25 + 0.8),
-            id: player.seedId(),
+            id: newId(),
           });
         }
       }
