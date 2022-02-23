@@ -173,10 +173,12 @@ const xpLevel = (() => {
 
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
-function imageHTML({ size, href, art, pos, zIndex }) {
+function imageHTML(opts) {
+  const { size, href, art, pos } = opts;
+
   let style = `width:${size}px;height:${size}px;`;
   if (pos) style += absPosStyle(pos);
-  if (zIndex) style += `z-index:${zIndex};`;
+  if (opts.style) style += opts.style;
 
   let img = `<img src="${art}" style="${style}"></img>`;
   return `<a href="${href}"> ${img} </a>`;
@@ -262,11 +264,35 @@ app.get("/", (req, res) => {
   }
 
   for (let item of ground) {
-    let { x, y, id } = item;
+    let { x, y, id, spawned } = item;
+
+    let style = `z-index:2;`;
+
+    if (tickClock - item.spawnTick < 5) {
+      style += `animation:item_${id} 0.6s ease-in;`;
+      const [from_x, from_y] = item.spawnPos;
+      grid += `<style>
+        @keyframes item_${id} {
+          from {
+            left: ${from_x}px;
+            top: ${from_y}px;
+          }
+          50% {
+            left: ${(item.x + from_x)/2}px;
+            top: ${from_y - 80}px;
+          }
+          to {
+            left: ${item.x}px;
+            top: ${item.y}px;
+          }
+        }
+      </style>`;
+    }
+
     grid += imageHTML({
       pos: [x, y],
       size: 30,
-      zIndex: 2,
+      style,
       href: "/farm/grab/" + id,
       art: ART[item.kind],
     });
@@ -350,6 +376,8 @@ app.get("/plant/:id/:seed", (req, res) => {
 });
 
 setInterval(() => {
+  tickClock++;
+
   for (let player of players) {
     for (let plant of player.farm)
       if (plant.kind) {
@@ -357,14 +385,19 @@ setInterval(() => {
         plant.xp++;
         if (xpLevel(plant.xp).level != xpLevel(plant.xp - 1).level)
           player.shouldReload = true;
-        if (plant.age % 158 == 0) {
+        if (plant.age % 49 == 0) {
           player.shouldReload = true;
           plant.xp += 5;
           let [x, y] = axialHexToPixel([plant.x, plant.y]);
+          x += 128*0.4;
+          y += 128*0.6;
+          let rot = Math.random() * Math.PI;
           player.ground.push({
+            spawnTick: tickClock,
+            spawnPos: [x, y],
             kind: devolve(plant.kind),
-            x: x + 120 * Math.random(),
-            y: y + 120 * (Math.random() * 0.25 + 0.8),
+            x: x + 70 * Math.cos(rot),
+            y: y + 20 * Math.sin(rot),
             id: newId(),
           });
         }
