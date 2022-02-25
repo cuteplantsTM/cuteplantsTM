@@ -5,6 +5,8 @@ const app = express.Router();
 fullApp.set("trust proxy", 1); // trust first proxy
 const port = 3008;
 
+const hackstead = require("./hackstead.js");
+
 app.use(
   cookieSession({
     name: "session",
@@ -171,12 +173,7 @@ const evolve = (item) => "plants.0." + item.split(".")[1];
 /* takes plant, returns seed */
 const devolve = (item) => "seeds." + item.split(".")[2];
 
-const xpLevel = (() => {
-  const levels = [
-    0, 120, 280, 480, 720, 1400, 1700, 2100, 2700, 3500, 6800, 7700, 8800, 10100,
-    11600, 22000, 24000, 26500, 29500, 33000, 37000, 41500, 46500, 52000, 99991,
-  ];
-
+const xpLevelGeneric = (levels => {
   return xp => {
     for (const lvlI in levels) {
       const lvlXp = levels[lvlI];
@@ -185,7 +182,12 @@ const xpLevel = (() => {
     }
     return { level: levels.length, has: xp, needs: NaN };
   }
-})();
+});
+const plantXpLevel = xpLevelGeneric([
+  0, 120, 280, 480, 720, 1400, 1700, 2100, 2700, 3500, 6800, 7700, 8800, 10100,
+  11600, 22000, 24000, 26500, 29500, 33000, 37000, 41500, 46500, 52000, 99991,
+]);
+const farmXpLevel = xpLevelGeneric(hackstead.advancements.map(x => x.xp));
 
 /* Rendering Helpers */
 
