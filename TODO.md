@@ -6,6 +6,7 @@ make an issue when you start working on one of these
 [x] show inventory
 [x] fix seed selection CSS
 [x] plant xp
+[ ] make plants produce more when level up
 [ ] collect nearby seeds also
 [ ] plant evolution
 [ ] farm xp
