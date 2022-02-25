@@ -18,8 +18,11 @@ app.use(function (req, res, next) {
   next();
 });
 
+/* Net Constants */
+
 const TICK_SECS = 1 / 5;
 const TICK_MS = 1000 * TICK_SECS;
+const TIMEOUT = 9000;
 
 /* EXAMPLE:
  * in:
@@ -45,6 +48,31 @@ function flatten(obj, path, out = {}) {
   }
   return out;
 }
+
+/* conf/data */
+
+const ART = flatten({
+  seeds: {
+    bractus:
+      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/bractus_seed.png?raw=true",
+    coffea:
+      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/coffea_cyl_seed.png?raw=true",
+    hacker:
+      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/hacker_vibes_vine_seed.png?raw=true",
+  },
+  plants: [
+    {
+      bractus:
+        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/bractus_loaf.gif?raw=true",
+      coffea:
+        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/coffea_cyl_baby.gif?raw=true",
+      hacker:
+        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/hacker_vibes_vine_baby.gif?raw=true",
+    },
+  ],
+  dirt: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/dirt.png?raw=true",
+  icon: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/seedlet.png?raw=true",
+});
 
 const NAMES = flatten({
   seed: {
@@ -256,6 +284,8 @@ const xpLevel = (() => {
   }
 })();
 
+/* Rendering Helpers */
+
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
 function imageHTML(opts) {
@@ -278,7 +308,7 @@ const axialHexToPixel = ([x, y]) => [
   90 * ((3 / 2) * y),
 ];
 
-function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
+function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id = "defaultBar" }) {
   const width = 90;
   const duration = (needs - has) * TICK_SECS;
   const prog = has / needs;
@@ -476,11 +506,22 @@ app.get("/", (req, res) => {
     getPlayer(req.session.playerId);
   }
 
-  const { farm, ground, ghosts, inv, selected } = getPlayer(req.session.playerId);
+  const { farm, ground, ghosts, inv, selected, xp } = getPlayer(req.session.playerId);
   let focus = farm.find(p => p.id == selected);
+
+  const { level, has, needs } = xpLevel(xp);
 
   res.send(`
     ${GLOBAL_STYLE}
+    ${progBar({
+        size: [450, 50],
+        pad: 5,
+        pos: [200, 0],
+        colors: ["skyblue", "blue"],
+        has,
+        needs,
+      })}
+    <br><br><br>
     ${farmGridHTML({ ground, farm, ghosts })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     ${selected ? plantFocusHTML(focus) : ''}
@@ -498,6 +539,7 @@ app.get("/", (req, res) => {
 
 app.get("/shouldreload", (req, res) => {
   const player = getPlayer(req.session.playerId);
+  player.lastUpdate = tickClock;
   res.send({ reload: player.shouldReload });
   player.shouldReload = false;
 });
@@ -526,7 +568,10 @@ app.get("/plant/:id", (req, res) => {
 
 app.get("/grab/:id", (req, res) => {
   const { id } = req.params;
-  const { inv, ground, ghosts } = getPlayer(req.session.playerId);
+  const player = getPlayer(req.session.playerId);
+  const { inv, ground, ghosts, xp } = player;
+
+  player.xp+=50;
 
   let itemI = ground.findIndex((i) => i.id == id);
   if (itemI > -1) {
@@ -541,7 +586,10 @@ app.get("/grab/:id", (req, res) => {
 
 app.get("/plant/:id/:seed", (req, res) => {
   const { id, seed } = req.params;
-  const { inv, farm } = getPlayer(req.session.playerId);
+  const player = getPlayer(req.session.playerId);
+  const { inv, farm } = player;
+
+  player.xp += 50;
 
   let seedI = inv.indexOf(seed);
 
@@ -556,6 +604,8 @@ app.get("/plant/:id/:seed", (req, res) => {
   }
   throw new Error("you don't have that kind of seed!");
 });
+
+/* Game Tick Loop */
 
 setInterval(() => {
   tickClock++;
