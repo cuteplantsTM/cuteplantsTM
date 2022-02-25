@@ -173,7 +173,7 @@ const evolve = (item) => "plants.0." + item.split(".")[1];
 /* takes plant, returns seed */
 const devolve = (item) => "seeds." + item.split(".")[2];
 
-const xpLevelGeneric = (levels => {
+const plantXpLevelGeneric = (levels => {
   return xp => {
     for (const lvlI in levels) {
       const lvlXp = levels[lvlI];
@@ -183,11 +183,11 @@ const xpLevelGeneric = (levels => {
     return { level: levels.length, has: xp, needs: NaN };
   }
 });
-const plantXpLevel = xpLevelGeneric([
+const plantplantXpLevel = plantXpLevelGeneric([
   0, 120, 280, 480, 720, 1400, 1700, 2100, 2700, 3500, 6800, 7700, 8800, 10100,
   11600, 22000, 24000, 26500, 29500, 33000, 37000, 41500, 46500, 52000, 99991,
 ]);
-const farmXpLevel = xpLevelGeneric(hackstead.advancements.map(x => x.xp));
+const farmplantXpLevel = plantXpLevelGeneric(hackstead.advancements.map(x => x.xp));
 
 /* Rendering Helpers */
 
@@ -263,7 +263,7 @@ function farmGridHTML({ ground, farm, ghosts }) {
     });
 
     if (plant.kind) {
-      const { level, has, needs } = xpLevel(xp);
+      const { level, has, needs } = plantXpLevel(xp);
       grid += progBar({
         size: [90, 10],
         pad: 5,
@@ -452,7 +452,7 @@ setInterval(() => {
       if (plant.kind) {
         plant.age++;
         plant.xp++;
-        if (xpLevel(plant.xp).level != xpLevel(plant.xp - 1).level)
+        if (plantXpLevel(plant.xp).level != plantXpLevel(plant.xp - 1).level)
           player.shouldReload = true;
         if (plant.age % 49 == 0) {
           player.shouldReload = true;
