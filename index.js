@@ -20,6 +20,7 @@ app.use(function (req, res, next) {
 
 const TICK_SECS = 1 / 5;
 const TICK_MS = 1000 * TICK_SECS;
+const TIMEOUT = 9000;
 
 /* EXAMPLE:
  * in:
@@ -132,6 +133,10 @@ function getPlayer(p_id) {
     newPlayer.playerId = p_id;
 
     //populate inventory with default items
+    newPlayer.stats = {
+        xp : 0
+    }
+    newPlayer.lastUpdate = 0;
     newPlayer.inv = ["seeds.bractus", "seeds.coffea", "seeds.hacker"];
     newPlayer.farm = [];
     newPlayer.ground = [];
@@ -356,6 +361,7 @@ app.get("/", (req, res) => {
   res.send(`
     ${farmGridHTML({ ground, farm, ghosts })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
+    <title>${players.filter(p => (tickClock - p.lastUpdate) < 9000).length} Online</title>
     <script>
     setInterval(async () => {
       let res = await fetch("/farm/shouldreload");
@@ -370,6 +376,7 @@ app.get("/", (req, res) => {
 
 app.get("/shouldreload", (req, res) => {
   const player = getPlayer(req.session.playerId);
+  player.lastUpdate = tickClock;
   res.send({ reload: player.shouldReload });
   player.shouldReload = false;
 });
