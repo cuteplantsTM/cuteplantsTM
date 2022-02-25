@@ -141,9 +141,7 @@ function getPlayer(p_id) {
     newPlayer.playerId = p_id;
 
     //populate inventory with default items
-    newPlayer.stats = {
-        xp : 0
-    }
+    newPlayer.xp = 0;
     newPlayer.lastUpdate = 0;
     newPlayer.inv = ["seeds.bractus", "seeds.coffea", "seeds.hacker"];
     newPlayer.farm = [];
@@ -173,7 +171,7 @@ const evolve = (item) => "plants.0." + item.split(".")[1];
 /* takes plant, returns seed */
 const devolve = (item) => "seeds." + item.split(".")[2];
 
-const plantXpLevelGeneric = (levels => {
+const xpLevelGeneric = (levels => {
   return xp => {
     for (const lvlI in levels) {
       const lvlXp = levels[lvlI];
@@ -183,11 +181,11 @@ const plantXpLevelGeneric = (levels => {
     return { level: levels.length, has: xp, needs: NaN };
   }
 });
-const plantplantXpLevel = plantXpLevelGeneric([
+const plantXpLevel = xpLevelGeneric([
   0, 120, 280, 480, 720, 1400, 1700, 2100, 2700, 3500, 6800, 7700, 8800, 10100,
   11600, 22000, 24000, 26500, 29500, 33000, 37000, 41500, 46500, 52000, 99991,
 ]);
-const farmplantXpLevel = plantXpLevelGeneric(hackstead.advancements.map(x => x.xp));
+const farmXpLevel = xpLevelGeneric(hackstead.advancements.map(x => x.xp));
 
 /* Rendering Helpers */
 
@@ -213,7 +211,7 @@ const axialHexToPixel = ([x, y]) => [
   90 * ((3 / 2) * y),
 ];
 
-function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
+function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id = "defaultBar" }) {
   const width = 90;
   const duration = (needs - has) * TICK_SECS;
   const prog = has / needs;
@@ -368,9 +366,19 @@ app.get("/", (req, res) => {
     getPlayer(req.session.playerId);
   }
 
-  const { farm, ground, ghosts, inv } = getPlayer(req.session.playerId);
+  const { farm, ground, ghosts, inv, xp } = getPlayer(req.session.playerId);
+
+  const { level, has, needs } = farmXpLevel(xp);
 
   res.send(`
+    ${progBar({
+        size: [90, 10],
+        pad: 5,
+        pos: [5, 5],
+        colors: ["skyblue", "blue"],
+        has,
+        needs,
+      })}
     ${farmGridHTML({ ground, farm, ghosts })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     <title>${players.filter(p => (tickClock - p.lastUpdate) < 9000).length} Online</title>
@@ -411,7 +419,10 @@ app.get("/plant/:id", (req, res) => {
 
 app.get("/grab/:id", (req, res) => {
   const { id } = req.params;
-  const { inv, ground, ghosts } = getPlayer(req.session.playerId);
+  const player = getPlayer(req.session.playerId);
+  const { inv, ground, ghosts, xp } = player;
+
+  player.xp+=50;
 
   let itemI = ground.findIndex((i) => i.id == id);
   if (itemI > -1) {
@@ -426,7 +437,10 @@ app.get("/grab/:id", (req, res) => {
 
 app.get("/plant/:id/:seed", (req, res) => {
   const { id, seed } = req.params;
-  const { inv, farm } = getPlayer(req.session.playerId);
+  const player = getPlayer(req.session.playerId);
+  const { inv, farm } = player;
+
+  player.xp += 50;
 
   let seedI = inv.indexOf(seed);
 
