@@ -238,14 +238,15 @@ function getPlayer(pId) {
 
     //populate inventory with default items
     newPlayer.inv = ["seed.bractus", "seed.coffea", "seed.hacker"];
+    newPlayer.xp = 0;
     newPlayer.farm = [];
     newPlayer.ground = [];
     /* ghosts are items that were on the ground that linger for a bit
        so that they can be animated as they move to the inventory */
     newPlayer.ghosts = [];
 
-    for (let x = 0; x < 3; x++)
-      for (let y = 0; y < 3; y++)
+    for (let x = 0; x < 6; x++)
+      for (let y = 0; y < 6; y++)
         if (x != y || x == 1)
           newPlayer.farm.push({
             x: x,
@@ -343,7 +344,7 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id = "def
     "></div>`;
 }
 
-const INV_GRID_POS = [650, 40];
+const INV_GRID_POS = [650, 120];
 const PLANT_FOCUS_GRID_POS = [650, 240];
 function farmGridHTML({ ground, farm, ghosts }) {
   let grid = '<div style="position:relative;">';
@@ -513,15 +514,16 @@ app.get("/", (req, res) => {
 
   res.send(`
     ${GLOBAL_STYLE}
+    <h1>LVL ${level}</h1>
     ${progBar({
         size: [450, 50],
-        pad: 5,
+        pad: 12,
         pos: [200, 0],
         colors: ["skyblue", "blue"],
         has,
         needs,
       })}
-    <br><br><br>
+    <br><br><br><br><br>
     ${farmGridHTML({ ground, farm, ghosts })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     ${selected ? plantFocusHTML(focus) : ''}
