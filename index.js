@@ -18,6 +18,8 @@ app.use(function (req, res, next) {
   next();
 });
 
+/* Net Constants */
+
 const TICK_SECS = 1 / 5;
 const TICK_MS = 1000 * TICK_SECS;
 const TIMEOUT = 9000;
@@ -46,6 +48,8 @@ function flatten(obj, path, out = {}) {
   }
   return out;
 }
+
+/* conf/data */
 
 const ART = flatten({
   seeds: {
@@ -124,6 +128,8 @@ const newId = (() => {
   return () => idGenerator++;
 })();
 
+/* Gameplay/Net Helpers */
+
 function getPlayer(p_id) {
   if (players.find((player) => player.playerId == p_id)) {
     return players.find((player) => player.playerId == p_id);
@@ -180,6 +186,8 @@ const xpLevel = (() => {
     return { level: levels.length, has: xp, needs: NaN };
   }
 })();
+
+/* Rendering Helpers */
 
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
@@ -349,6 +357,8 @@ function invGridHTML({ inv, href = () => undefined, pos }) {
   return grid;
 }
 
+/* Farm Page */
+
 app.get("/", (req, res) => {
   //on no save
   if (req.session.isNew || typeof req.session.playerId == "undefined") {
@@ -429,6 +439,8 @@ app.get("/plant/:id/:seed", (req, res) => {
   }
   throw new Error("you don't have that kind of seed!");
 });
+
+/* Game Tick Loop */
 
 setInterval(() => {
   tickClock++;
