@@ -315,7 +315,7 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id }) {
 
 const INV_GRID_POS = [650, 40];
 const PLANT_FOCUS_GRID_POS = [650, 240];
-function farmGridHTML({ ground, farm, ghosts }) {
+function farmGridHTML({ ground, farm, ghosts, focus }) {
   let grid = '<div style="position:relative;">';
 
   for (let plant of farm) {
@@ -328,6 +328,27 @@ function farmGridHTML({ ground, farm, ghosts }) {
       art: (plant.kind ? plant.kind : "dirt"),
     });
 
+    if (plant == focus) {
+      const center = [x + 120 * 0.45, y + 120 * 0.25];
+      for (let deg = 0; deg < 360; deg += 90) {
+        grid += `<style>
+          @keyframes focus_pointer_${deg} {
+            from { transform:rotate(${deg}deg) translate(58px); }
+            to { transform:rotate(${deg}deg) translate(62px); }
+          }
+        </style>`;
+        grid += `<h1 style="
+          animation-name: focus_pointer_${deg};
+          animation-duration: 0.3s;
+          animation-iteration-count: infinite;
+          animation-direction: alternate;
+          color:crimson;
+          ${absPosStyle(center)}"
+        ><</h1>`;
+      }
+    }
+
+    /* xp bar */
     if (plant.kind) {
       const { level, has, needs } = xpLevel(xp);
       grid += progBar({
@@ -346,6 +367,7 @@ function farmGridHTML({ ground, farm, ghosts }) {
     }
   }
 
+  /* ground items */
   for (let item of ground.concat(ghosts)) {
     let { x, y, id, spawned } = item;
 
@@ -425,9 +447,8 @@ function invGridHTML({ inv, href = () => undefined, pos }) {
 
 function plantFocusHTML(plant) {
   let box = `<div style="${absPosStyle(PLANT_FOCUS_GRID_POS)}">`;
-  box += `<h2><u>${NAMES[plant.kind]}</u></h2>`;
+  box += `<h2 style="color:crimson;"><u>${NAMES[plant.kind]}</u></h2>`;
 
-  console.log(RECIPES);
   for (const recipe of RECIPES.map(r => r[plantClass(plant.kind)])) {
     let makes = recipe.makes();
     let [iconItem] = makes.items;
@@ -443,18 +464,20 @@ function plantFocusHTML(plant) {
     </div>`;
 
     let mins = recipe.time * TICK_SECS / 60;
-    box += `<h3 style="margin:0px;padding:5px;">${mins.toFixed(2)}m</h3>`;
+    box += "<div>";
+      box += `<h3 style="margin:0px;padding:0px;">${mins.toFixed(1)} min</h3>`;
 
-    const needsMap = invMap(recipe.needs);
-    box += '<p style="margin-left:20px;">';
-    for (const [item, amount] of needsMap)
-      box += `x${amount} `,
-      box += `<img
-        style="width:1.25em;height:1.25em;position:relative;top:0.3em;"
-        src="/farm/${item}.png"
-      ></img>`,
-      box += ` ${NAMES[item]} <br>`;
-    box += '</p>';
+      const needsMap = invMap(recipe.needs);
+      box += '<p style="margin:0px;">';
+      for (const [item, amount] of needsMap)
+        box += `x${amount} `,
+        box += `<img
+          style="width:1.25em;height:1.25em;position:relative;top:0.3em;"
+          src="/farm/${item}.png"
+        ></img>`,
+        box += ` ${NAMES[item]} <br>`;
+      box += '</p>';
+    box += "</div>";
 
     box += "</div>"
   }
@@ -481,7 +504,7 @@ app.get("/", (req, res) => {
 
   res.send(`
     ${GLOBAL_STYLE}
-    ${farmGridHTML({ ground, farm, ghosts })}
+    ${farmGridHTML({ ground, farm, ghosts, focus })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     ${selected ? plantFocusHTML(focus) : ''}
     <script>
