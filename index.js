@@ -219,7 +219,10 @@ function getPlayer(pId) {
     newPlayer.playerId = pId;
 
     //populate inventory with default items
-    newPlayer.inv = ["seed.bractus", "seed.coffea", "seed.hacker"];
+    newPlayer.inv = [
+      "seed.bractus", "seed.coffea", "seed.hacker",
+      "fertilizer.0",
+    ];
     newPlayer.farm = [];
     newPlayer.ground = [];
     /* ghosts are items that were on the ground that linger for a bit
@@ -471,6 +474,16 @@ function plantFocusHTML({ plant, inv }) {
     }
   </style>`;
 
+  for (const item of inv) {
+    if (item == "fertilizer.0") {
+      box += imageHTML({
+        size: 30,
+        art: "fertilizer.0",
+        href: "/farm/fertilize",
+      });
+    }
+  }
+
   for (const recipe of RECIPES.map(r => r[plantClass(plant.kind)])) {
     let makes = recipe.makes();
     let [iconItem] = makes.items;
@@ -546,6 +559,19 @@ app.get("/", (req, res) => {
     }, ${TICK_MS});
     </script>
   `);
+});
+
+app.get("/fertilize", (req, res) => {
+  const { farm, selected, inv } = getPlayer(req.session.playerId);
+
+  const fertI = inv.indexOf("fertilizer.0");
+  if (fertI > -1) {
+    inv.splice(fertI, 1);
+    let focusPlant = farm.find(p => p.id == selected);
+    focusPlant.speedUp = true;
+  }
+
+  res.redirect("/farm");
 });
 
 app.get("/shouldreload", (req, res) => {
@@ -626,7 +652,7 @@ setInterval(() => {
         if (level != xpLevel(plant.xp - 1).level)
           player.shouldReload = true;
         
-        let speedNow = 10;
+        let speedNow = plant.speedUp ? 10 : 50;
         for (let i = 0; i < level; i++)
           speedNow /= 1.1;
 
