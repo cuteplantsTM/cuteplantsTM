@@ -51,29 +51,6 @@ function flatten(obj, path, out = {}) {
 
 /* conf/data */
 
-const ART = flatten({
-  seeds: {
-    bractus:
-      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/bractus_seed.png?raw=true",
-    coffea:
-      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/coffea_cyl_seed.png?raw=true",
-    hacker:
-      "https://github.com/hackagotchi/hackagotchi/blob/master/img/misc/hacker_vibes_vine_seed.png?raw=true",
-  },
-  plants: [
-    {
-      bractus:
-        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/bractus_loaf.gif?raw=true",
-      coffea:
-        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/coffea_cyl_baby.gif?raw=true",
-      hacker:
-        "https://github.com/hackagotchi/hackagotchi/blob/master/img/plant/hacker_vibes_vine_baby.gif?raw=true",
-    },
-  ],
-  dirt: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/dirt.png?raw=true",
-  icon: "https://github.com/hackagotchi/hackagotchi/blob/master/img/icon/seedlet.png?raw=true",
-});
-
 const NAMES = flatten({
   seed: {
     bractus: "bractus seed",
@@ -127,6 +104,16 @@ const NAMES = flatten({
 
 const sum = list => list.reduce((a, x) => a + x, 0);
 const otherPlants = (plant) => ["bractus", "hacker", "coffea"].filter(x => x != plant);
+
+const hasEnough = ({ needs, inv }) => {
+  inv = JSON.parse(JSON.stringify(inv));
+  for (const item of needs) {
+    let i = inv.indexOf(item);
+    if (i >= 0) inv.splice(i, 1);
+    else return { enough: false };
+  }
+  return { enough: true, invWithout: inv };
+}
 
 /* EXAMPLE:
  input: chooseWeighted({ a: 4, b: 1 })
@@ -245,8 +232,8 @@ function getPlayer(pId) {
        so that they can be animated as they move to the inventory */
     newPlayer.ghosts = [];
 
-    for (let x = 0; x < 6; x++)
-      for (let y = 0; y < 6; y++)
+    for (let x = 0; x < 3; x++)
+      for (let y = 0; y < 3; y++)
         if (x != y || x == 1)
           newPlayer.farm.push({
             x: x,
@@ -263,11 +250,6 @@ const invMap = inv => inv.reduce((map, i) => map.set(i, 1 + (map.get(i) ?? 0)), 
 
 
 const plantClass = item => item.split(".").slice(-1)[0];
-
-/* takes seed, returns plant */
-const evolve = (item) => "plant.0." + plantClass(item);
-/* takes plant, returns seed */
-const devolve = (item) => "seed." + plantClass(item);
 
 const xpLevel = (() => {
   const levels = [
@@ -344,9 +326,9 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id = "def
     "></div>`;
 }
 
-const INV_GRID_POS = [650, 120];
-const PLANT_FOCUS_GRID_POS = [650, 240];
-function farmGridHTML({ ground, farm, ghosts }) {
+const INV_GRID_POS = [30, 550];
+const PLANT_FOCUS_GRID_POS = [650, 40];
+function farmGridHTML({ ground, farm, ghosts, focus }) {
   let grid = '<div style="position:relative;">';
 
   for (let plant of farm) {
@@ -359,6 +341,27 @@ function farmGridHTML({ ground, farm, ghosts }) {
       art: (plant.kind ? plant.kind : "dirt"),
     });
 
+    if (plant == focus) {
+      const center = [x + 120 * 0.45, y + 120 * 0.25];
+      for (let deg = 0; deg < 360; deg += 90) {
+        grid += `<style>
+          @keyframes focus_pointer_${deg} {
+            from { transform:rotate(${deg}deg) translate(58px); }
+            to { transform:rotate(${deg}deg) translate(62px); }
+          }
+        </style>`;
+        grid += `<h1 style="
+          animation-name: focus_pointer_${deg};
+          animation-duration: 0.3s;
+          animation-iteration-count: infinite;
+          animation-direction: alternate;
+          color:crimson;
+          ${absPosStyle(center)}"
+        ><</h1>`;
+      }
+    }
+
+    /* xp bar */
     if (plant.kind) {
       const { level, has, needs } = xpLevel(xp);
       grid += progBar({
@@ -375,8 +378,18 @@ function farmGridHTML({ ground, farm, ghosts }) {
         z-index:1;
       ">lvl ${level}</p>`;
     }
+
+    if (plant.craft) {
+      grid += imageHTML({
+        pos: [x + 120, y + 14],
+        size: 40,
+        art: plant.craft.makes.items[0],
+        style: "opacity:20%;"
+      });
+    }
   }
 
+  /* ground items */
   for (let item of ground.concat(ghosts)) {
     let { x, y, id, spawned } = item;
 
@@ -454,38 +467,63 @@ function invGridHTML({ inv, href = () => undefined, pos }) {
   return grid;
 }
 
-function plantFocusHTML(plant) {
+function plantFocusHTML({ plant, inv }) {
   let box = `<div style="${absPosStyle(PLANT_FOCUS_GRID_POS)}">`;
-  box += `<h2><u>${NAMES[plant.kind]}</u></h2>`;
+  box += `<h2 style="color:crimson;"><u>${NAMES[plant.kind]}</u></h2>`;
+  box += `<style>
+    .recipe {
+      padding: 5px;
+      border-radius:20px;
+    }
+    .recipe-active {
+      background: white;
+    }
+    .recipe-active:hover {
+      cursor: pointer;
+      background: #ffebeb; 
+    }
+    .recipe-na {
+      cursor: not-allowed;
+      opacity: 40%;
+    }
+  </style>`;
 
-  console.log(RECIPES);
   for (const recipe of RECIPES.map(r => r[plantClass(plant.kind)])) {
     let makes = recipe.makes();
     let [iconItem] = makes.items;
 
-    box += '<div style="display:flex;align-items:center;margin:20px;">'
-    box += `<img
-      style="width:40px;height:40px;margin-right:10px;"
-      src="/farm/${iconItem}.png"
-    ></img>`;
-    box += `<div style="width:250px;overflow:hidden;">
-      <h3 style="margin:0px;padding:5px;">${NAMES[iconItem]}</h3>
-      <p style="margin:0px;padding:5px;">${recipe.explanation}</p>
-    </div>`;
-
-    let mins = recipe.time * TICK_SECS / 60;
-    box += `<h3 style="margin:0px;padding:5px;">${mins.toFixed(2)}m</h3>`;
-
-    const needsMap = invMap(recipe.needs);
-    box += '<p style="margin-left:20px;">';
-    for (const [item, amount] of needsMap)
-      box += `x${amount} `,
+    let { enough } = hasEnough({needs: recipe.needs, inv});
+    box += `<div
+      class="recipe ${enough ? "recipe-active" : "recipe-na"}"
+      style="display:flex;align-items:center;margin:20px;"
+    >`;
       box += `<img
-        style="width:1.25em;height:1.25em;position:relative;top:0.3em;"
-        src="/farm/${item}.png"
-      ></img>`,
-      box += ` ${NAMES[item]} <br>`;
-    box += '</p>';
+        style="width:40px;height:40px;margin-right:10px;"
+        src="/farm/${iconItem}.png"
+      ></img>`;
+      box += `<div style="width:250px;overflow:hidden;">
+        <h3 style="margin:0px;padding:5px;">${NAMES[iconItem]}</h3>
+        <p style="margin:0px;padding:5px;">${recipe.explanation}</p>
+      </div>`;
+
+      let mins = recipe.time * TICK_SECS / 60;
+      box += "<div>";
+        box += `<h3 style="margin:0px;padding:0px;">${mins.toFixed(1)} min</h3>`;
+
+        const invmap = invMap(inv);
+        const needsmap = invMap(recipe.needs);
+        for (const [item, amount] of needsmap) {
+          const has = invmap.get(item) ?? 0;
+          box += `<p style="margin:0px;${(has < amount) ? "color:red;" : ""}">`;
+          box += `x${amount} `;
+          box += `<img
+            style="width:1.25em;height:1.25em;position:relative;top:0.3em;"
+            src="/farm/${item}.png"
+          ></img>`;
+          box += ` ${NAMES[item]} <br>`;
+          box += '</p>';
+        }
+      box += "</div>";
 
     box += "</div>"
   }
@@ -514,19 +552,19 @@ app.get("/", (req, res) => {
 
   res.send(`
     ${GLOBAL_STYLE}
-    <h1>LVL ${level}</h1>
     ${progBar({
-        size: [450, 50],
-        pad: 12,
-        pos: [200, 0],
+        size: [380, 30],
+        pad: 8,
+        pos: [110, 30],
         colors: ["skyblue", "blue"],
         has,
         needs,
       })}
+    <h2 style="${absPosStyle([515, 26])}">lvl ${level}</h2>
     <br><br><br><br><br>
-    ${farmGridHTML({ ground, farm, ghosts })}
+    ${farmGridHTML({ ground, farm, ghosts, focus })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
-    ${selected ? plantFocusHTML(focus) : ''}
+    ${selected ? plantFocusHTML({ plant: focus, inv }) : ''}
     <script>
     setInterval(async () => {
       let res = await fetch("/farm/shouldreload");
@@ -546,41 +584,51 @@ app.get("/shouldreload", (req, res) => {
   player.shouldReload = false;
 });
 
+app.get("/craft/:plantId/:recipeIndex", (req, res) => {
+  const { plantId, recipeIndex } = req.params;
+  const player = getPlayer(req.session.playerId);
+  const { farm, inv } = player;
+
+  const plant = farm.find((p) => p.id == id);
+  if (!plant.kind || plant.craft) return res.redirect("/farm");
+
+  const recipe = RECIPES.map(r => r[plantClass(plant.kind)])[recipeIndex];
+  if (!recipe) return res.redirect("/farm");
+
+  const { invAfter, enough } = hasEnough({ needs: recipe.needs, inv });
+  if (!enough) return res.redirect("/farm");
+
+  player.inv = invWithout;
+  plant.craft = {
+    ageStarted: plant.age,
+    ageFinished: plant.age + recipe.time,
+    makes: recipe.makes(),
+  };
+  res.redirect("/farm");
+});
+
 app.get("/plant/:id", (req, res) => {
   const { id } = req.params;
   const player = getPlayer(req.session.playerId);
   const { farm, inv } = player;
+  const seeds = inv.filter(i => /^seed/.test(i));
 
-  let plot = farm.find((p) => p.id == id);
+  const plot = farm.find((p) => p.id == id);
   if (!plot) {
   } else if (plot.kind) {
     player.selected = id;
-  } else if (inv.length >= 1) {
+  } else if (seeds.length >= 1) {
     let page = GLOBAL_STYLE + "<h2>";
     page += "These are the seeds you have in your inventory:";
     page += "</h2>";
-    page += invGridHTML({ inv, pos: [50, 50], href: item => `/farm/plant/${id}/${item}` });
+    page += invGridHTML({
+      inv: seeds,
+      pos: [50, 50],
+      href: item => `/farm/plant/${id}/${item}`
+    });
     res.send(page);
 
     return;
-  }
-
-  res.redirect("/farm");
-});
-
-app.get("/grab/:id", (req, res) => {
-  const { id } = req.params;
-  const player = getPlayer(req.session.playerId);
-  const { inv, ground, ghosts, xp } = player;
-
-  player.xp+=50;
-
-  let itemI = ground.findIndex((i) => i.id == id);
-  if (itemI > -1) {
-    const [item] = ground.splice(itemI, 1);
-    inv.push(item.kind);
-    ghosts.push(item);
-    setTimeout(() => ghosts.splice(ghosts.indexOf(item), 1), 500);
   }
 
   res.redirect("/farm");
@@ -600,7 +648,7 @@ app.get("/plant/:id/:seed", (req, res) => {
     let plant = farm.find((p) => p.id == id);
     plant.xp = 0;
     plant.age = 0;
-    plant.kind = evolve(seed);
+    plant.kind = "plant.0." + plantClass(seed);
     res.redirect("/farm");
     return;
   }
@@ -613,21 +661,9 @@ setInterval(() => {
   tickClock++;
 
   for (let player of players) {
-    for (let plant of player.farm)
-      if (plant.kind) {
-        plant.age++;
-        plant.xp++;
-        const { level } = xpLevel(plant.xp);
-        if (level != xpLevel(plant.xp - 1).level)
+    for (let plant of player.farm) if (plant.kind) {
+      const dropItem = kind => {
           player.shouldReload = true;
-        
-        let speedNow = 100;
-        for (let i = 0; i < level; i++)
-          speedNow /= 1.1;
-
-        if (plant.age % Math.round(speedNow) == 0) {
-          player.shouldReload = true;
-          plant.xp += 5;
           let [x, y] = axialHexToPixel([plant.x, plant.y]);
           x += 128*0.4;
           y += 128*0.6;
@@ -635,13 +671,35 @@ setInterval(() => {
           player.ground.push({
             spawnTick: tickClock,
             spawnPos: [x, y],
-            kind: devolve(plant.kind),
+            kind,
             x: x + 70 * Math.cos(rot),
             y: y + 20 * Math.sin(rot),
             id: newId(),
           });
-        }
+      };
+
+      plant.age++;
+      plant.xp++;
+      const { level } = xpLevel(plant.xp);
+      if (level != xpLevel(plant.xp - 1).level)
+        player.shouldReload = true;
+      
+      let speedNow = 10;
+      for (let i = 0; i < level; i++)
+        speedNow /= 1.1;
+
+      if (plant.age % Math.round(speedNow) == 0) {
+        plant.xp += 5;
+        dropItem("essence.0." + plantClass(plant.kind));
       }
+
+      if (plant.craft && plant.age >= plant.craft.ageFinished) {
+        plant.xp += plant.craft.makes.xp;
+        for (const item of plant.craft.makes.items)
+          dropItem(item);
+        delete plant.craft;
+      }
+    }
   }
 }, TICK_MS);
 
