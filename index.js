@@ -129,6 +129,15 @@ const sum = (list) => list.reduce((a, x) => a + x, 0);
 const otherPlants = (plant) =>
   ["bractus", "hacker", "coffea"].filter((x) => x != plant);
 
+const evolutionStage = (level, plant) => {
+  let stage = 0;
+  if (level < 5) stage = 0;
+  else if (level < 10) stage = 1;
+  else if (level < 15) stage = 2;
+  else stage = 3;
+  return stage;
+};
+
 /* EXAMPLE:
  input: chooseWeighted({ a: 4, b: 1 })
  output: "b" 1/5 of the time
@@ -655,6 +664,10 @@ setInterval(() => {
         plant.xp++;
         const { level } = xpLevel(plant.xp);
         if (level != xpLevel(plant.xp - 1).level) player.shouldReload = true;
+        let newKind = `plant.${evolutionStage(level)}.${plantClass(
+          plant.kind
+        )}`;
+        if (newKind !== plant.kind) plant.kind = newKind;
 
         let speedNow = 100;
         for (let i = 0; i < level; i++) speedNow /= 1.1;
