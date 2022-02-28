@@ -245,15 +245,12 @@ function getPlayer(pId) {
        so that they can be animated as they move to the inventory */
     newPlayer.ghosts = [];
 
-    for (let x = 0; x < 6; x++)
-      for (let y = 0; y < 6; y++)
-        if (x != y || x == 1)
-          newPlayer.farm.push({
-            x: x,
-            y: y,
-            age: 0,
-            id: newId(),
-          });
+    newPlayer.farm.push({
+      x: 0,
+      y: 0,
+      age: 0,
+      id: newId(),
+    });
     players.push(newPlayer);
     return newPlayer;
   }
