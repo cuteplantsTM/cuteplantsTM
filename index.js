@@ -20,7 +20,7 @@ app.use(function (req, res, next) {
 
 /* Net Constants */
 
-const TICK_SECS = 1 / 5;
+const TICK_SECS = 1 / 5 / 5;
 const TICK_MS = 1000 * TICK_SECS;
 const TIMEOUT = 9000;
 
@@ -232,6 +232,8 @@ function getPlayer(pId) {
        so that they can be animated as they move to the inventory */
     newPlayer.ghosts = [];
 
+    newPlayer.activeTabIndex = 0;
+
     for (let x = 0; x < 3; x++)
       for (let y = 0; y < 3; y++)
         if (x != y || x == 1)
@@ -332,7 +334,7 @@ function farmGridHTML({ ground, farm, ghosts, focus }) {
   let grid = '<div style="position:relative;">';
 
   for (let plant of farm) {
-    let { x, y, id, xp } = plant;
+    let { x, y, id, xp, age } = plant;
     [x, y] = axialHexToPixel([x, y]);
     grid += imageHTML({
       pos: [x, y],
@@ -380,12 +382,37 @@ function farmGridHTML({ ground, farm, ghosts, focus }) {
     }
 
     if (plant.craft) {
+      const { ageFinished, ageStarted } = plant.craft;
+      const have = age - ageStarted;
+      const need = ageFinished - ageStarted;
+      const prog = have / need;
+
+      const pos = [x + 100, y + 14];
       grid += imageHTML({
-        pos: [x + 120, y + 14],
+        pos,
         size: 40,
         art: plant.craft.makes.items[0],
         style: "opacity:20%;"
       });
+
+      grid += `
+      <style>
+        @keyframes craft_anim_${id} {
+          from { width: 0px; }
+          to { width: 40px; }
+        }
+      </style>
+      <div style="
+        overflow:hidden;
+        animation-name: craft_anim_${id};
+        animation-delay:${-TICK_SECS * have}s;
+        animation-duration:${TICK_SECS*need}s;
+        height:40px;
+        ${absPosStyle(pos)}
+      ">${imageHTML({
+        size: 40,
+        art: plant.craft.makes.items[0],
+      })}</div>`;
     }
   }
 
@@ -467,10 +494,8 @@ function invGridHTML({ inv, href = () => undefined, pos }) {
   return grid;
 }
 
-function plantFocusHTML({ plant, inv }) {
-  let box = `<div style="${absPosStyle(PLANT_FOCUS_GRID_POS)}">`;
-  box += `<h2 style="color:crimson;"><u>${NAMES[plant.kind]}</u></h2>`;
-  box += `<style>
+function recipesHTML({ plant, inv }) {
+  let box = `<style>
     .recipe {
       padding: 5px;
       border-radius:20px;
@@ -488,23 +513,29 @@ function plantFocusHTML({ plant, inv }) {
     }
   </style>`;
 
-  for (const recipe of RECIPES.map(r => r[plantClass(plant.kind)])) {
+  for (const [index, recipe] of Object.entries(RECIPES.map(r => r[plantClass(plant.kind)]))) {
     let makes = recipe.makes();
     let [iconItem] = makes.items;
 
     let { enough } = hasEnough({needs: recipe.needs, inv});
-    box += `<div
-      class="recipe ${enough ? "recipe-active" : "recipe-na"}"
-      style="display:flex;align-items:center;margin:20px;"
-    >`;
-      box += `<img
-        style="width:40px;height:40px;margin-right:10px;"
-        src="/farm/${iconItem}.png"
-      ></img>`;
-      box += `<div style="width:250px;overflow:hidden;">
-        <h3 style="margin:0px;padding:5px;">${NAMES[iconItem]}</h3>
-        <p style="margin:0px;padding:5px;">${recipe.explanation}</p>
-      </div>`;
+    box += `
+      <a
+        href="/farm/craft/${plant.id}/${index}"
+        style="text-decoration:none;color:black;"
+      >
+        <div
+          class="recipe ${enough ? "recipe-active" : "recipe-na"}"
+          style="display:flex;align-items:center;margin:20px;"
+        >
+          <img
+            style="width:40px;height:40px;margin-right:10px;"
+            src="/farm/${iconItem}.png"
+          ></img>
+          <div style="width:250px;overflow:hidden;">
+            <h3 style="margin:0px;padding:5px;">${NAMES[iconItem]}</h3>
+            <p style="margin:0px;padding:5px;">${recipe.explanation}</p>
+          </div>
+      `;
 
       let mins = recipe.time * TICK_SECS / 60;
       box += "<div>";
@@ -525,8 +556,34 @@ function plantFocusHTML({ plant, inv }) {
         }
       box += "</div>";
 
-    box += "</div>"
+    box += "</div></a>"
   }
+
+  return box;
+}
+
+function plantFocusHTML({ plant, inv, activeTabIndex }) {
+  let box = `<div style="${absPosStyle(PLANT_FOCUS_GRID_POS)}width:500px;">`;
+  box += `<h1 style="margin:0px 0px 8px 0px;">${NAMES[plant.kind].toUpperCase()}</h1>`;
+  box += `<hr style="border-color:black;margin:0px;" />`
+
+  const tabs = [
+    ["craft", () => recipesHTML({plant, inv})],
+    ["skills", () => "<h1>uh</h1>"],
+  ];
+  const [activeTab, activeTabHTML] = tabs[activeTabIndex];
+
+  const tabTitles = tabs.map(([tab], i) => {
+    let style = "text-decoration:none;"
+    if (tab == activeTab) style += `color:crimson;`;
+    else style += "color:black;";
+    return `<a href="/farm/switchtab/${i}" style="${style}">${tab}</a>`;
+  });
+  box += `<h2 style="margin:0px;"> ${tabTitles.join(' | ')} </h2>`;
+  box += `<hr style="border-color:black;margin:0px;" />`
+
+  box += activeTabHTML();
+
   box += `</div>`;
   return box;
 }
@@ -545,7 +602,7 @@ app.get("/", (req, res) => {
     getPlayer(req.session.playerId);
   }
 
-  const { farm, ground, ghosts, inv, selected, xp } = getPlayer(req.session.playerId);
+  const { activeTabIndex, farm, ground, ghosts, inv, selected, xp } = getPlayer(req.session.playerId);
   let focus = farm.find(p => p.id == selected);
 
   const { level, has, needs } = xpLevel(xp);
@@ -564,7 +621,7 @@ app.get("/", (req, res) => {
     <br><br><br><br><br>
     ${farmGridHTML({ ground, farm, ghosts, focus })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
-    ${selected ? plantFocusHTML({ plant: focus, inv }) : ''}
+    ${selected ? plantFocusHTML({ plant: focus, inv, activeTabIndex }) : ''}
     <script>
     setInterval(async () => {
       let res = await fetch("/farm/shouldreload");
@@ -584,18 +641,23 @@ app.get("/shouldreload", (req, res) => {
   player.shouldReload = false;
 });
 
+app.get("/switchtab/:tabIndex", (req, res) => {
+  getPlayer(req.session.playerId).activeTabIndex = +req.params.tabIndex;
+  res.redirect("/farm");
+});
+
 app.get("/craft/:plantId/:recipeIndex", (req, res) => {
   const { plantId, recipeIndex } = req.params;
   const player = getPlayer(req.session.playerId);
   const { farm, inv } = player;
 
-  const plant = farm.find((p) => p.id == id);
+  const plant = farm.find((p) => p.id == plantId);
   if (!plant.kind || plant.craft) return res.redirect("/farm");
 
   const recipe = RECIPES.map(r => r[plantClass(plant.kind)])[recipeIndex];
   if (!recipe) return res.redirect("/farm");
 
-  const { invAfter, enough } = hasEnough({ needs: recipe.needs, inv });
+  const { enough, invWithout } = hasEnough({ needs: recipe.needs, inv });
   if (!enough) return res.redirect("/farm");
 
   player.inv = invWithout;
@@ -604,6 +666,24 @@ app.get("/craft/:plantId/:recipeIndex", (req, res) => {
     ageFinished: plant.age + recipe.time,
     makes: recipe.makes(),
   };
+  res.redirect("/farm");
+});
+
+app.get("/grab/:id", (req, res) => {
+  const { id } = req.params;
+  const player = getPlayer(req.session.playerId);
+  const { inv, ground, ghosts, xp } = player;
+
+  player.xp+=50;
+
+  let itemI = ground.findIndex((i) => i.id == id);
+  if (itemI > -1) {
+    const [item] = ground.splice(itemI, 1);
+    inv.push(item.kind);
+    ghosts.push(item);
+    setTimeout(() => ghosts.splice(ghosts.indexOf(item), 1), 500);
+  }
+
   res.redirect("/farm");
 });
 
@@ -663,19 +743,19 @@ setInterval(() => {
   for (let player of players) {
     for (let plant of player.farm) if (plant.kind) {
       const dropItem = kind => {
-          player.shouldReload = true;
-          let [x, y] = axialHexToPixel([plant.x, plant.y]);
-          x += 128*0.4;
-          y += 128*0.6;
-          let rot = Math.random() * Math.PI;
-          player.ground.push({
-            spawnTick: tickClock,
-            spawnPos: [x, y],
-            kind,
-            x: x + 70 * Math.cos(rot),
-            y: y + 20 * Math.sin(rot),
-            id: newId(),
-          });
+        player.shouldReload = true;
+        let [x, y] = axialHexToPixel([plant.x, plant.y]);
+        x += 128*0.4;
+        y += 128*0.6;
+        let rot = Math.random() * Math.PI;
+        player.ground.push({
+          spawnTick: tickClock,
+          spawnPos: [x, y],
+          kind,
+          x: x + 70 * Math.cos(rot),
+          y: y + 20 * Math.sin(rot),
+          id: newId(),
+        });
       };
 
       plant.age++;
@@ -684,7 +764,7 @@ setInterval(() => {
       if (level != xpLevel(plant.xp - 1).level)
         player.shouldReload = true;
       
-      let speedNow = 10;
+      let speedNow = 100;
       for (let i = 0; i < level; i++)
         speedNow /= 1.1;
 
@@ -697,6 +777,7 @@ setInterval(() => {
         plant.xp += plant.craft.makes.xp;
         for (const item of plant.craft.makes.items)
           dropItem(item);
+        player.shouldReload = true;
         delete plant.craft;
       }
     }
