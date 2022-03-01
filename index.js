@@ -20,7 +20,7 @@ app.use(function (req, res, next) {
 
 /* Net Constants */
 
-const TICK_SECS = 1 / 5;
+const TICK_SECS = 1 / 50;
 const TICK_MS = 1000 * TICK_SECS;
 const TIMEOUT = 9000;
 
@@ -287,9 +287,9 @@ const xpLevel = (() => {
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
 
 function imageHTML(opts) {
-  const { size, href, art, pos } = opts;
+  const { size, href, art, pos, inline = "" } = opts;
 
-  let style = `width:${size}px;height:${size}px;`;
+  let style = `width:${size}px;height:${size}px;${inline}`;
   if (pos) style += absPosStyle(pos);
   if (opts.style) style += opts.style;
 
@@ -341,10 +341,16 @@ function progBar({ size: [w, h], pos: [x, y], colors, pad, has, needs, id = "def
     "></div>`;
 }
 
+const offsets = [
+      [+1, 0], [+1, -1], [0, -1], 
+      [-1, 0], [-1, +1], [0, +1], 
+];
+const neighbors = (x, y) => offsets.map(([ox, oy]) => [x + ox, y + oy]);
+
 const INV_GRID_POS = [650, 120];
 const PLANT_FOCUS_GRID_POS = [650, 240];
-function farmGridHTML({ ground, farm, ghosts }) {
-  let grid = '<div style="position:relative;">';
+function farmGridHTML({ ground, farm, ghosts, farmXp }) {
+  let grid = '<div style="position:relative;top:150px;left:200px;">';
 
   for (let plant of farm) {
     let { x, y, id, xp } = plant;
@@ -354,6 +360,7 @@ function farmGridHTML({ ground, farm, ghosts }) {
       size: 120,
       href: "/farm/plant/" + id,
       art: (plant.kind ? plant.kind : "dirt"),
+      style: "z-index:1;",
     });
 
     if (plant.kind) {
@@ -371,6 +378,24 @@ function farmGridHTML({ ground, farm, ghosts }) {
         ${absPosStyle([x + 128 * 0.35, y + 138])}
         z-index:1;
       ">lvl ${level}</p>`;
+    }
+  }
+
+  let surroundings = [];
+  for (const { x, y } of farm)
+    surroundings = [...surroundings, ...neighbors(x, y)]
+
+  surroundings = [...new Set(surroundings)];
+
+  if (farm.length < xpLevel(farmXp).level) {
+    for (let neighbor of surroundings) {
+      grid += imageHTML({
+        pos: axialHexToPixel(neighbor),
+        size: 120,
+        href: `/farm/expand/${neighbor[0]}/${neighbor[1]}`,
+        art: "dirt",
+        style: "opacity:0.5;z-index:-0;",
+      });
     }
   }
 
@@ -455,7 +480,6 @@ function plantFocusHTML(plant) {
   let box = `<div style="${absPosStyle(PLANT_FOCUS_GRID_POS)}">`;
   box += `<h2><u>${NAMES[plant.kind]}</u></h2>`;
 
-  console.log(RECIPES);
   for (const recipe of RECIPES.map(r => r[plantClass(plant.kind)])) {
     let makes = recipe.makes();
     let [iconItem] = makes.items;
@@ -521,7 +545,7 @@ app.get("/", (req, res) => {
         needs,
       })}
     <br><br><br><br><br>
-    ${farmGridHTML({ ground, farm, ghosts })}
+    ${farmGridHTML({ ground, farm, ghosts, farmXp: xp })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     ${selected ? plantFocusHTML(focus) : ''}
     <script>
@@ -543,25 +567,13 @@ app.get("/shouldreload", (req, res) => {
   player.shouldReload = false;
 });
 
-app.get("/plant/:id", (req, res) => {
-  const { id } = req.params;
-  const player = getPlayer(req.session.playerId);
-  const { farm, inv } = player;
-
-  let plot = farm.find((p) => p.id == id);
-  if (!plot) {
-  } else if (plot.kind) {
-    player.selected = id;
-  } else if (inv.length >= 1) {
-    let page = GLOBAL_STYLE + "<h2>";
-    page += "These are the seeds you have in your inventory:";
-    page += "</h2>";
-    page += invGridHTML({ inv, pos: [50, 50], href: item => `/farm/plant/${id}/${item}` });
-    res.send(page);
-
-    return;
-  }
-
+app.get("/expand/:x/:y", (req, res) => {
+  getPlayer(req.session.playerId).farm.push({
+    x: +req.params.x,
+    y: +req.params.y,
+    age: 0,
+    id: newId(),
+  });
   res.redirect("/farm");
 });
 
@@ -578,6 +590,32 @@ app.get("/grab/:id", (req, res) => {
     inv.push(item.kind);
     ghosts.push(item);
     setTimeout(() => ghosts.splice(ghosts.indexOf(item), 1), 500);
+  }
+
+  res.redirect("/farm");
+});
+
+app.get("/plant/:id", (req, res) => {
+  const { id } = req.params;
+  const player = getPlayer(req.session.playerId);
+  const { farm, inv } = player;
+
+  let plot = farm.find((p) => p.id == id);
+  if (!plot) {
+  } else if (plot.kind) {
+    player.selected = id;
+  } else if (inv.length >= 1) {
+    let page = GLOBAL_STYLE + "<h2>";
+    page += "These are the seeds you have in your inventory:";
+    page += "</h2>";
+    page += invGridHTML({
+      inv,
+      pos: [50, 50],
+      href: (item) => `/farm/plant/${id}/${item}`,
+    });
+    res.send(page);
+
+    return;
   }
 
   res.redirect("/farm");
