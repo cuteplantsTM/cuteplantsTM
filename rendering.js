@@ -1,14 +1,42 @@
-const {
-  TICK_SECS,
-  xpLevel,
-  tickClock,
-  invMap,
-  plantClass,
-  hasEnough,
-} = require("./utils");
-const { RECIPES, NAMES } = require("./data");
+const gameplay = require("./gameplay");
+const { RECIPES, NAMES } = gameplay;
+
+const TICK_SECS = 1 / 5 / 5;
+const TICK_MS = 1000 * TICK_SECS;
 
 const absPosStyle = ([x, y]) => `position:absolute;left:${x}px;top:${y}px;`;
+
+const invMap = (inv) =>
+  inv.reduce((map, i) => map.set(i, 1 + (map.get(i) ?? 0)), new Map());
+
+const plantClass = (item) => item.split(".").slice(-1)[0];
+
+const hasEnough = ({ needs, inv }) => {
+  inv = JSON.parse(JSON.stringify(inv));
+  for (const item of needs) {
+    let i = inv.indexOf(item);
+    if (i >= 0) inv.splice(i, 1);
+    else return { enough: false };
+  }
+  return { enough: true, invWithout: inv };
+};
+
+const xpLevel = (() => {
+  const levels = [
+    0, 120, 280, 480, 720, 1400, 1700, 2100, 2700, 3500, 6800, 7700, 8800,
+    10100, 11600, 22000, 24000, 26500, 29500, 33000, 37000, 41500, 46500, 52000,
+    99991,
+  ];
+
+  return (xp) => {
+    for (const lvlI in levels) {
+      const lvlXp = levels[lvlI];
+      if (xp < lvlXp) return { level: lvlI, has: xp, needs: lvlXp };
+      xp -= lvlXp;
+    }
+    return { level: levels.length, has: xp, needs: NaN };
+  };
+})();
 
 function imageHTML(opts) {
   const { size, href, art, pos, inline = "" } = opts;
@@ -85,6 +113,7 @@ const neighbors = (() => {
 
 const INV_GRID_POS = [30, 550];
 const PLANT_FOCUS_GRID_POS = [650, 40];
+
 function farmGridHTML({ ground, farm, ghosts, farmXp, focus }) {
   let grid = '<div style="position:relative;top:150px;left:200px;">';
 
@@ -196,7 +225,7 @@ function farmGridHTML({ ground, farm, ghosts, farmXp, focus }) {
 
     let style = `z-index:2;`;
 
-    if (tickClock - item.spawnTick < 5) {
+    if (gameplay.tickClock - item.spawnTick < 5) {
       style += `animation:item_${id} 0.6s ease-in;`;
       const [from_x, from_y] = item.spawnPos;
       grid += `<style>
@@ -352,14 +381,15 @@ function plantFocusHTML({ plant, inv, activeTabIndex }) {
 }
 
 module.exports = {
-  absPosStyle,
-  imageHTML,
-  axialHexToPixel,
+  xpLevel,
+  plantClass,
+  hasEnough,
   progBar,
-  neighbors,
   farmGridHTML,
   invGridHTML,
-  recipesHTML,
-  plantFocusHTML,
   INV_GRID_POS,
+  plantFocusHTML,
+  absPosStyle,
+  TICK_MS,
+  axialHexToPixel,
 };

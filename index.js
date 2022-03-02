@@ -5,27 +5,29 @@ const app = express.Router();
 fullApp.set("trust proxy", 1); // trust first proxy
 const port = 3008;
 
-let {
-  TICK_MS,
-  evolutionStage,
-  hasEnough,
-  tickClock,
-  players,
-  newId,
-  getPlayer,
-  plantClass,
-  xpLevel,
-} = require("./utils");
-const { RECIPES } = require("./data");
+const gameplay = require("./gameplay");
+const { newId, getPlayer, RECIPES } = gameplay;
+
 const {
-  axialHexToPixel,
+  xpLevel,
+  plantClass,
+  hasEnough,
   progBar,
   farmGridHTML,
   invGridHTML,
+  INV_GRID_POS,
   plantFocusHTML,
   absPosStyle,
-  INV_GRID_POS,
+  TICK_MS,
+  axialHexToPixel,
 } = require("./rendering");
+
+const evolutionStage = (level) => {
+  if (level < 5) return 0;
+  else if (level < 10) return 1;
+  else if (level < 15) return 2;
+  else return 3;
+};
 
 app.use(
   cookieSession({
@@ -88,7 +90,7 @@ app.get("/", (req, res) => {
 
 app.get("/shouldreload", (req, res) => {
   const player = getPlayer(req.session.playerId);
-  player.lastUpdate = tickClock;
+  player.lastUpdate = gameplay.tickClock;
   res.send({ reload: player.shouldReload });
   player.shouldReload = false;
 });
@@ -232,9 +234,9 @@ app.get("/plant/:id/:seed", (req, res) => {
 /* Game Tick Loop */
 
 setInterval(() => {
-  tickClock++;
+  gameplay.tickClock++;
 
-  for (let player of players) {
+  for (let player of gameplay.players) {
     for (let plant of player.farm)
       if (plant.kind) {
         /* out of your plant, and onto the ground! */
@@ -245,7 +247,7 @@ setInterval(() => {
           y += 128 * 0.6;
           let rot = Math.random() * Math.PI;
           player.ground.push({
-            spawnTick: tickClock,
+            spawnTick: gameplay.tickClock,
             spawnPos: [x, y],
             kind,
             x: x + 70 * Math.cos(rot),
