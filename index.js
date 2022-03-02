@@ -5,13 +5,8 @@ const app = express.Router();
 fullApp.set("trust proxy", 1); // trust first proxy
 const port = 3008;
 
-const gameplay = require("./gameplay");
-const { newId, getPlayer, RECIPES } = gameplay;
-
+const { RECIPES, xpLevel, plantClass, hasEnough } = require("./gameplay");
 const {
-  xpLevel,
-  plantClass,
-  hasEnough,
   progBar,
   farmGridHTML,
   invGridHTML,
@@ -21,6 +16,44 @@ const {
   TICK_MS,
   axialHexToPixel,
 } = require("./rendering");
+
+let players = [];
+let tickClock = 0;
+const newId = (() => {
+  let idGenerator = 0;
+  return () => idGenerator++;
+})();
+
+/* finds the player with the given id, or inits a new one if they haven't played before */
+function getPlayer(pId) {
+  if (players.find((player) => player.playerId == pId)) {
+    return players.find((player) => player.playerId == pId);
+  } else {
+    let newPlayer = {};
+
+    newPlayer.playerId = pId;
+
+    //populate inventory with default items
+    newPlayer.inv = ["seed.bractus", "seed.coffea", "seed.hacker"];
+    newPlayer.xp = 0;
+    newPlayer.farm = [];
+    newPlayer.ground = [];
+    /* ghosts are items that were on the ground that linger for a bit
+       so that they can be animated as they move to the inventory */
+    newPlayer.ghosts = [];
+
+    newPlayer.farm.push({
+      x: 0,
+      y: 0,
+      age: 0,
+      id: newId(),
+    });
+    newPlayer.activeTabIndex = 0;
+
+    players.push(newPlayer);
+    return newPlayer;
+  }
+}
 
 const evolutionStage = (level) => {
   if (level < 5) return 0;
@@ -72,7 +105,7 @@ app.get("/", (req, res) => {
       has,
       needs,
     })}
-    ${farmGridHTML({ ground, farm, ghosts, farmXp: xp, focus })}
+    ${farmGridHTML({ ground, farm, ghosts, farmXp: xp, focus, tickClock })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
     ${selected ? plantFocusHTML({ plant: focus, inv, activeTabIndex }) : ""}
     <h2 style="${absPosStyle([515, 26])}">lvl ${level}</h2>
@@ -90,7 +123,7 @@ app.get("/", (req, res) => {
 
 app.get("/shouldreload", (req, res) => {
   const player = getPlayer(req.session.playerId);
-  player.lastUpdate = gameplay.tickClock;
+  player.lastUpdate = tickClock;
   res.send({ reload: player.shouldReload });
   player.shouldReload = false;
 });
@@ -234,9 +267,9 @@ app.get("/plant/:id/:seed", (req, res) => {
 /* Game Tick Loop */
 
 setInterval(() => {
-  gameplay.tickClock++;
+  tickClock++;
 
-  for (let player of gameplay.players) {
+  for (let player of players) {
     for (let plant of player.farm)
       if (plant.kind) {
         /* out of your plant, and onto the ground! */
@@ -247,7 +280,7 @@ setInterval(() => {
           y += 128 * 0.6;
           let rot = Math.random() * Math.PI;
           player.ground.push({
-            spawnTick: gameplay.tickClock,
+            spawnTick: tickClock,
             spawnPos: [x, y],
             kind,
             x: x + 70 * Math.cos(rot),
