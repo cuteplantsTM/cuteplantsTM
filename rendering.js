@@ -33,9 +33,9 @@ function progBar({
   pad,
   has,
   needs,
+  animate = true,
   id = "defaultBar",
 }) {
-  const width = 90;
   const duration = (needs - has) * TICK_SECS;
   const prog = has / needs;
   return `
@@ -50,10 +50,10 @@ function progBar({
     <style>
       @keyframes xpbar_${id} {
         from {
-          width: ${width * prog}px;
+          width: ${w * prog}px;
         }
         to {
-          width: ${width}px;
+          width: ${w}px;
         }
       }
     </style>
@@ -63,9 +63,11 @@ function progBar({
       height:${h}px;
       border-radius:${h / 2}px;
       background-color:${colors[1]};
-      animation-duration:${duration}s;
-      animation-name:xpbar_${id};
-      animation-timing-function:linear;
+      ${
+        animate
+          ? `animation: xpbar_${id} ${duration}s linear;`
+          : `width: ${w * prog}px;`
+      }
     "></div>`;
 }
 

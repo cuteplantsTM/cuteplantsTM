@@ -104,6 +104,7 @@ app.get("/", (req, res) => {
       colors: ["skyblue", "blue"],
       has,
       needs,
+      animate: false,
     })}
     ${farmGridHTML({ ground, farm, ghosts, farmXp: xp, focus, tickClock })}
     ${invGridHTML({ inv, pos: INV_GRID_POS })}
